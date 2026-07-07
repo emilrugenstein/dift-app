@@ -16,7 +16,8 @@ val appVersionName: String = providers.gradleProperty("versionName").orNull ?: "
 fun versionCodeFor(versionName: String): Int {
     val match = Regex("""^(\d+)\.(\d+)\.(\d+)""").find(versionName) ?: return 1
     val (major, minor, patch) = match.destructured
-    return major.toInt() * 10_000 + minor.toInt() * 100 + patch.toInt()
+    // coerceAtLeast: "0.0.0-dev" would otherwise compute 0, which AGP rejects.
+    return (major.toInt() * 10_000 + minor.toInt() * 100 + patch.toInt()).coerceAtLeast(1)
 }
 
 android {
