@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- INVARIANT (CLAUDE.md #5): every user-facing string lives here — no hardcoded text in Kotlin. -->
+<resources>
+    <string name="app_name">Dift</string>
+
+    <!-- Home screen (M0 shell) -->
+    <string name="home_version_label">Version %s</string>
+    <string name="home_tagline">Local-only screen time &amp; app blocking.</string>
+
+    <!-- M0 overlay spike -->
+    <string name="spike_section_title">M0 overlay spike</string>
+    <string name="spike_explanation">Proves that a service-drawn overlay with keyboard input works on this device. Removed in M2.</string>
+    <string name="spike_grant_overlay_permission">Grant overlay permission</string>
+    <string name="spike_start_overlay">Start overlay spike</string>
+    <string name="spike_overlay_title">Dift overlay spike</string>
+    <string name="spike_overlay_body">If you can type into the field below and the keyboard appears, the spike passes.</string>
+    <string name="spike_overlay_input_label">Type here to test the keyboard</string>
+    <string name="spike_overlay_close">Close overlay</string>
+
+    <!-- Notifications -->
+    <string name="notification_channel_monitor">Monitoring</string>
+    <string name="spike_notification_title">Dift overlay spike running</string>
+    <string name="spike_notification_body">Temporary M0 test service.</string>
+</resources>

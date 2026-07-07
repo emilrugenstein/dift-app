@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    INVARIANT (CLAUDE.md #1): this app must NEVER request android.permission.INTERNET
+    or any other network permission. All data stays on the device.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Blocking overlay window (special permission, granted via Settings). -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- Foreground service hosting the monitoring/overlay machinery (Android 14+ typed FGS). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <!-- FGS notification visibility on Android 13+. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:name=".DiftApplication"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Dift">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            M0 spike: proves a service-drawn Compose overlay with working soft-keyboard input
+            on the target device. Will be replaced by the real blocking service in M2
+            (see docs/features/blocking.md). Blocking never launches an Activity (ADR-0003).
+        -->
+        <service
+            android:name=".system.spike.SpikeOverlayService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="m0-overlay-spike" />
+        </service>
+    </application>
+</manifest>

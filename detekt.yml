@@ -1,0 +1,31 @@
+# Detekt configuration — builds upon the default ruleset (buildUponDefaultConfig = true in app/build.gradle.kts).
+# Only deviations from the defaults live here. Style authority for the whole repo.
+
+build:
+  maxIssues: 0
+
+style:
+  MagicNumber:
+    active: false # UI code is full of harmless literals; correctness constants get named anyway
+  ReturnCount:
+    active: false
+  UnusedPrivateMember:
+    ignoreAnnotated: ['Preview']
+
+complexity:
+  LongMethod:
+    threshold: 120 # Compose screen functions are long by nature
+  LongParameterList:
+    functionThreshold: 8
+    constructorThreshold: 10
+    ignoreAnnotated: ['Composable']
+  TooManyFunctions:
+    ignoreAnnotatedFunctions: ['Preview']
+
+naming:
+  FunctionNaming:
+    ignoreAnnotated: ['Composable'] # Composables are PascalCase by convention
+
+exceptions:
+  TooGenericExceptionCaught:
+    active: false

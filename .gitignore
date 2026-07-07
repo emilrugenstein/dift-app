@@ -1,0 +1,19 @@
+# Gradle
+.gradle/
+build/
+.kotlin/
+
+# Local configuration (SDK path etc.)
+local.properties
+
+# IDE
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Signing — the release keystore must NEVER be committed (see docs/RELEASING.md)
+*.jks
+*.keystore
+keystore.properties
