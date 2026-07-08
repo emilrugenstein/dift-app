@@ -4,7 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import app.dift.ui.navigation.DiftNavHost
+import app.dift.ui.navigation.DiftApp
 import app.dift.ui.theme.DiftTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -15,7 +15,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             DiftTheme {
-                DiftNavHost()
+                DiftApp()
             }
         }
     }

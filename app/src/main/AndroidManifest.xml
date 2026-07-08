@@ -3,7 +3,18 @@
     INVARIANT (CLAUDE.md #1): this app must NEVER request android.permission.INTERNET
     or any other network permission. All data stays on the device.
 -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Screen-time source (special permission, granted via Settings > Usage access). -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- App picker needs the full launchable-app list (package visibility, API 30+). -->
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
 
     <!-- Blocking overlay window (special permission, granted via Settings). -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
@@ -31,6 +42,18 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- WorkManager: on-demand initialization via DiftApplication (Configuration.Provider). -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
 
         <!--
             M0 spike: proves a service-drawn Compose overlay with working soft-keyboard input
