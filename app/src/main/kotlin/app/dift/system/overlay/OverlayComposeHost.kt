@@ -2,6 +2,7 @@ package app.dift.system.overlay
 
 import android.content.Context
 import android.graphics.PixelFormat
+import android.view.Gravity
 import android.view.WindowManager
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.ComposeView
@@ -18,16 +19,18 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 
 /**
- * Hosts a Compose UI inside a raw [WindowManager] window of TYPE_APPLICATION_OVERLAY.
+ * Hosts a Compose UI inside a raw [WindowManager] window. This is the ONLY sanctioned way to put
+ * blocking UI on screen: blocking must never launch an Activity (ADR-0003,
+ * docs/ANDROID_CONSTRAINTS.md). ComposeView outside an Activity needs hand-wired ViewTree owners —
+ * that plumbing lives here and nowhere else.
  *
- * This is the ONLY sanctioned way to put blocking UI on screen: blocking must never launch
- * an Activity (ADR-0003, docs/ANDROID_CONSTRAINTS.md). ComposeView outside an Activity needs
- * hand-wired ViewTree owners — that plumbing lives here and nowhere else.
- *
- * The window is deliberately focusable (no FLAG_NOT_FOCUSABLE): the FRICTION unblock flow
- * requires the soft keyboard to open over the overlay.
+ * The window's [params] are supplied by the caller so the same host serves both the full-screen
+ * block overlay and the small top-right indicator (see the companion factories).
  */
-class OverlayComposeHost(private val context: Context) {
+class OverlayComposeHost(
+    private val context: Context,
+    private val params: WindowManager.LayoutParams,
+) {
 
     private val windowManager = context.getSystemService(WindowManager::class.java)
     private var view: ComposeView? = null
@@ -47,22 +50,6 @@ class OverlayComposeHost(private val context: Context) {
             setContent(content)
         }
 
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
-            PixelFormat.TRANSLUCENT,
-        ).apply {
-            softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
-            // True edge-to-edge: draw behind status + navigation bars and into the cutout.
-            // Content keeps itself readable via safeDrawingPadding() inside the composable.
-            fitInsetsTypes = 0
-            layoutInDisplayCutoutMode =
-                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
-        }
-
         windowManager.addView(composeView, params)
         treeOwner.moveToResumed()
         view = composeView
@@ -75,6 +62,46 @@ class OverlayComposeHost(private val context: Context) {
         owner?.moveToDestroyed()
         owner = null
         windowManager.removeViewImmediate(current)
+    }
+
+    companion object {
+        /** Full-screen, edge-to-edge, touch-consuming, non-focusable (no unblock keyboard). */
+        fun blockParams() = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED or
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            // True edge-to-edge: draw behind the system bars and into the cutout. Content stays
+            // readable via safeDrawingPadding() inside the composable.
+            fitInsetsTypes = 0
+            layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+        }
+
+        /** Small, top-right, click-through status pip (never steals touch or focus). */
+        fun indicatorParams() = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED or
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.END
+            x = INDICATOR_MARGIN_PX
+            y = INDICATOR_TOP_PX
+            layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+        }
+
+        private const val INDICATOR_MARGIN_PX = 24
+        private const val INDICATOR_TOP_PX = 96
     }
 }
 

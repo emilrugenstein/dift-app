@@ -1,16 +1,12 @@
 package app.dift.domain.model
 
 /**
- * How hard it is to bypass an active block. Ordered weakest → strongest so that
- * "most-strict rule wins" can be resolved with [ordinal] comparison (see RuleEngine, M2+).
+ * Persistence-only holdover (like the enums in StorageEnums.kt). Usage-debt blocks are always
+ * [HARD] — there is no bypass — but the `block_rules.strictness` column survives from v1 for
+ * schema stability, so the enum stays. New code does not branch on it.
  */
 enum class Strictness {
-    /** A single tap dismisses the block and grants temporary access. */
     TAP_THROUGH,
-
-    /** Unblocking requires deliberate friction: a wait timer plus a typed phrase. */
     FRICTION,
-
-    /** No unblock path. The block holds until its trigger condition ends. */
     HARD,
 }

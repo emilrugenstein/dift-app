@@ -4,9 +4,8 @@
     <string name="app_name">Dift</string>
 
     <!-- Navigation -->
-    <string name="nav_dashboard">Today</string>
-    <string name="nav_apps">Apps</string>
-    <string name="nav_rules">Rules</string>
+    <string name="nav_overview">Overview</string>
+    <string name="nav_blocks">Blocks</string>
     <string name="nav_settings">Settings</string>
 
     <!-- Durations -->
@@ -14,65 +13,48 @@
     <string name="duration_minutes">%1$dm</string>
     <string name="duration_under_minute">&lt;1m</string>
 
-    <!-- Dashboard -->
-    <string name="dashboard_today_title">Screen time today</string>
-    <string name="dashboard_top_apps_title">Top apps</string>
-    <string name="dashboard_empty">No usage recorded yet. Data appears a few minutes after granting usage access.</string>
-    <string name="dashboard_usage_access_missing">Dift needs usage access to measure screen time. Everything stays on this device.</string>
-    <string name="dashboard_range_days">%1$d days</string>
+    <!-- Overview -->
+    <string name="overview_week_range">%1$s – %2$s</string>
+    <string name="overview_prev_week">Previous week</string>
+    <string name="overview_next_week">Next week</string>
+    <string name="overview_mode_night">Nights</string>
+    <string name="overview_mode_totals">Daily totals</string>
+    <!-- Column headers, Monday first (nights lead into these weekdays). -->
+    <string name="overview_day_labels">Mo,Tu,We,Th,Fr,Sa,Su</string>
 
-    <!-- Apps -->
-    <string name="apps_title">All apps · today</string>
-    <string name="apps_block">Block</string>
-    <string name="apps_blocked">Blocked</string>
+    <!-- Blocks -->
+    <string name="blocks_title">Blocks</string>
+    <string name="blocks_add">Add block</string>
+    <string name="blocks_empty">No blocks yet. Add one to start rationing screen time.</string>
+    <string name="blocks_delete">Delete</string>
+    <string name="block_window_format">%1$s – %2$s</string>
+    <string name="block_burst_format">%1$d s</string>
 
-    <!-- Rules -->
-    <string name="rules_title">Rules</string>
-    <string name="rules_empty">No rules yet. Add one below, or block an app from the Apps tab.</string>
-    <string name="rules_open_history">History</string>
-    <string name="rules_add">Add rule</string>
-    <string name="rules_delete">Delete</string>
-
-    <!-- Rule editor -->
-    <string name="editor_name_label">Rule name</string>
-    <string name="editor_type_always">Always</string>
-    <string name="editor_type_limit">Daily limit</string>
-    <string name="editor_type_schedule">Schedule</string>
-    <string name="editor_strictness_tap">Tap</string>
-    <string name="editor_strictness_friction">Friction</string>
-    <string name="editor_strictness_hard">Hard</string>
-    <string name="editor_strictness_hard_warning">Hard blocks cannot be lifted until the condition ends. Configure carefully.</string>
-    <string name="editor_limit_label">Minutes per day</string>
+    <!-- Block editor -->
+    <string name="editor_name_label">Block name</string>
+    <string name="editor_days_label">Days</string>
     <string name="editor_schedule_start">Start</string>
     <string name="editor_schedule_end">End</string>
     <string name="editor_day_initials">M,T,W,T,F,S,S</string>
-    <string name="editor_apps_label">Apps this rule blocks</string>
-    <string name="editor_save">Save rule</string>
-    <string name="rule_subtitle_always">Always blocked</string>
-    <string name="rule_subtitle_limit">Daily limit · %1$d min</string>
-    <string name="rule_subtitle_schedule">Scheduled</string>
-    <string name="rule_subtitle_debt">Night usage-debt</string>
-
-    <!-- History -->
-    <string name="history_title">Block history</string>
-    <string name="history_empty">No blocks recorded yet.</string>
+    <string name="editor_burst_label">Max continuous use</string>
+    <string name="editor_exempt_label">Exempt apps</string>
+    <string name="editor_exempt_description">These stay usable during the block and never build up debt.</string>
+    <string name="editor_save">Save block</string>
+    <string name="days_every_day">Every day</string>
+    <string name="days_weekdays">Weekdays</string>
+    <string name="days_weekends">Weekends</string>
 
     <!-- Block overlay -->
-    <string name="block_title">Blocked by Dift</string>
-    <string name="block_reason_always">This app is on your always-blocked list.</string>
-    <string name="block_reason_limit">You\'ve reached today\'s time limit for this app.</string>
-    <string name="block_reason_schedule">This app is blocked during the current schedule.</string>
-    <string name="block_reason_debt">Night mode: every second of use is being repaid.</string>
-    <string name="block_unblock">Unblock</string>
-    <string name="block_friction_wait">Wait %1$d s…</string>
-    <string name="block_friction_type_phrase">Type this to continue: \"%1$s\"</string>
-    <string name="block_hard_until">Locked until %1$s.</string>
-    <string name="block_hard_countdown">%1$d s remaining</string>
-    <string name="block_hard_no_end">Locked until the condition ends.</string>
+    <string name="block_title">Phone locked</string>
+    <string name="block_debt_message">Repaying screen time. Lock the phone and wait it out.</string>
+    <string name="block_seconds_remaining">%1$d s</string>
+
+    <!-- Corner indicator -->
+    <string name="indicator_blocked">Blocked</string>
 
     <!-- Onboarding -->
     <string name="onboarding_title">Dift</string>
-    <string name="onboarding_intro">Local-only screen time and app blocking. Two permissions to get started — nothing ever leaves this phone.</string>
+    <string name="onboarding_intro">Local-only screen time and night blocking. Two permissions to get started — nothing ever leaves this phone.</string>
     <string name="onboarding_usage_title">Usage access</string>
     <string name="onboarding_usage_description">Lets Dift measure how long each app is on screen. Required.</string>
     <string name="onboarding_open_usage_settings">Open usage access settings</string>
@@ -88,9 +70,7 @@
     <string name="settings_permission_accessibility">Accessibility service</string>
     <string name="settings_permission_battery">Battery optimization exemption</string>
     <string name="settings_open">Open</string>
-    <string name="settings_night_mode_title">Night mode</string>
-    <string name="settings_night_mode_label">Usage-debt after 22:30</string>
-    <string name="settings_night_mode_description">Every second of use between 22:30 and 06:00 is repaid with an equal lockout (max 60 s bursts). Only unlocked use counts — SOS, flashlight and lockscreen camera stay free.</string>
+    <string name="settings_blocks_hint">Create and edit night blocks in the Blocks tab.</string>
     <string name="home_version_label">Version %s</string>
 
     <!-- Accessibility service -->

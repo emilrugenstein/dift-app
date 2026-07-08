@@ -10,120 +10,116 @@ import org.junit.Test
 
 class DebtReducerTest {
 
-    private val config = DebtReducer.Config(maxBurstSeconds = 60, debtRatio = 1.0f)
+    private val config = DebtReducer.Config(maxBurstSeconds = 60)
     private val sec = 1_000L
 
-    private fun tick(inWindow: Boolean = true, unlocked: Boolean = true, overlay: Boolean = false) =
-        DebtEvent.Tick(inWindow = inWindow, unlocked = unlocked, overlayShowing = overlay)
+    private fun tick(inWindow: Boolean = true, using: Boolean = true) =
+        DebtEvent.Tick(inWindow = inWindow, using = using)
+
+    private fun reduce(state: DebtState, event: DebtEvent, nowSec: Long) =
+        DebtReducer.reduce(state, event, nowSec * sec, config)
 
     @Test
-    fun `unlock inside window starts a burst`() {
-        val state = DebtReducer.reduce(DebtState.IDLE, DebtEvent.Unlock(inWindow = true), 1000, config)
-        assertEquals(1000L, state.burstStartedAtMs)
-        assertNull(state.debtUntilMs)
+    fun `using inside window starts a burst`() {
+        val state = reduce(DebtState.IDLE, tick(), 1)
+        assertEquals(1 * sec, state.burstStartedAtMs)
+        assertNull(state.cooldownUntilMs)
     }
 
     @Test
-    fun `unlock outside window does not start a burst`() {
-        val state = DebtReducer.reduce(DebtState.IDLE, DebtEvent.Unlock(inWindow = false), 1000, config)
+    fun `burst reaching the cap fires an equal cooldown and clears the burst`() {
+        var state = reduce(DebtState.IDLE, tick(), 0)
+        state = reduce(state, tick(), 59) // still under the cap
+        assertNull(state.cooldownUntilMs)
+        state = reduce(state, tick(), 60) // at the cap
+        assertNull(state.burstStartedAtMs)
+        assertEquals(120 * sec, state.cooldownUntilMs) // 60s used -> 60s cooldown
+    }
+
+    @Test
+    fun `locking mid-burst banks elapsed time as equal cooldown`() {
+        var state = reduce(DebtState.IDLE, tick(), 0)
+        state = reduce(state, DebtEvent.Lock, 45)
+        assertNull(state.burstStartedAtMs)
+        assertEquals(90 * sec, state.cooldownUntilMs) // 45s used -> 45s cooldown
+    }
+
+    @Test
+    fun `locking with nothing used creates no cooldown`() {
+        val state = reduce(DebtState.IDLE, DebtEvent.Lock, 5)
+        assertNull(state.cooldownUntilMs)
         assertNull(state.burstStartedAtMs)
     }
 
     @Test
-    fun `burst reaching the cap on a tick fires equal debt and ends the burst`() {
-        var state = DebtReducer.reduce(DebtState.IDLE, DebtEvent.Unlock(inWindow = true), 0, config)
-        // Tick still under the cap: nothing fires.
-        state = DebtReducer.reduce(state, tick(), 59 * sec, config)
-        assertNull(state.debtUntilMs)
-        // Tick at the cap: debt = 60 s.
-        state = DebtReducer.reduce(state, tick(), 60 * sec, config)
+    fun `an exempt-app pause freezes the accumulator and resuming continues it`() {
+        var state = reduce(DebtState.IDLE, tick(), 0)
+        state = reduce(state, tick(using = false), 30) // switched to an exempt app
+        assertEquals(30 * sec, state.burstElapsedMs)
         assertNull(state.burstStartedAtMs)
-        assertEquals(60 * sec + 60 * sec, state.debtUntilMs)
-    }
-
-    @Test
-    fun `locking mid-burst converts elapsed time to equal debt`() {
-        var state = DebtReducer.reduce(DebtState.IDLE, DebtEvent.Unlock(inWindow = true), 0, config)
-        state = DebtReducer.reduce(state, DebtEvent.Lock, 40 * sec, config)
-        assertNull(state.burstStartedAtMs)
-        assertEquals(40 * sec + 40 * sec, state.debtUntilMs)
-    }
-
-    @Test
-    fun `debt ratio scales the penalty`() {
-        val doubleRatio = DebtReducer.Config(maxBurstSeconds = 60, debtRatio = 2.0f)
-        var state = DebtReducer.reduce(DebtState.IDLE, DebtEvent.Unlock(inWindow = true), 0, doubleRatio)
-        state = DebtReducer.reduce(state, DebtEvent.Lock, 30 * sec, doubleRatio)
-        assertEquals(30 * sec + 60 * sec, state.debtUntilMs) // 30s used -> 60s debt
-    }
-
-    @Test
-    fun `unlocking during active debt does not start a burst`() {
-        val debt = DebtState(debtUntilMs = 100 * sec)
-        val state = DebtReducer.reduce(debt, DebtEvent.Unlock(inWindow = true), 50 * sec, config)
-        assertNull(state.burstStartedAtMs)
-        assertEquals(100 * sec, state.debtUntilMs)
-    }
-
-    @Test
-    fun `overlay time does not accrue burst`() {
-        val debt = DebtState(debtUntilMs = 100 * sec)
-        // Ticking while the overlay is up and debt is serving: unchanged, still no burst.
-        val state = DebtReducer.reduce(debt, tick(overlay = true), 70 * sec, config)
-        assertNull(state.burstStartedAtMs)
-        assertEquals(100 * sec, state.debtUntilMs)
-    }
-
-    @Test
-    fun `debt is served once the deadline passes`() {
-        val debt = DebtState(debtUntilMs = 100 * sec)
-        val serving = DebtReducer.reduce(debt, tick(overlay = true), 99 * sec, config)
-        assertTrue(serving.debtActiveAt(99 * sec))
-        val served = DebtReducer.reduce(debt, tick(overlay = true), 100 * sec, config)
-        assertNull(served.debtUntilMs)
-        assertFalse(served.debtActiveAt(100 * sec))
+        state = reduce(state, tick(using = false), 300) // stayed on it for minutes: frozen
+        assertEquals(30 * sec, state.burstElapsedMs)
+        state = reduce(state, tick(), 310) // back to a blockable app
+        state = reduce(state, tick(), 340) // 30 banked + 30 more = cap
+        assertEquals((340 + 60) * sec, state.cooldownUntilMs)
     }
 
     @Test
     fun `leaving the window cancels the burst without creating debt`() {
-        var state = DebtReducer.reduce(DebtState.IDLE, DebtEvent.Unlock(inWindow = true), 0, config)
-        state = DebtReducer.reduce(state, tick(inWindow = false), 30 * sec, config)
+        var state = reduce(DebtState.IDLE, tick(), 0)
+        state = reduce(state, tick(inWindow = false), 30)
         assertNull(state.burstStartedAtMs)
-        assertNull(state.debtUntilMs)
+        assertEquals(0L, state.burstElapsedMs)
+        state = reduce(state, DebtEvent.Lock, 35)
+        assertNull(state.cooldownUntilMs)
     }
 
     @Test
-    fun `a fresh burst can start after debt is served`() {
-        // Debt served on this tick...
-        var state = DebtReducer.reduce(DebtState(debtUntilMs = 100 * sec), tick(overlay = true), 100 * sec, config)
-        assertNull(state.debtUntilMs)
-        // ...next tick with the overlay gone starts a new burst.
-        state = DebtReducer.reduce(state, tick(overlay = false), 101 * sec, config)
-        assertEquals(101 * sec, state.burstStartedAtMs)
+    fun `serving a cooldown resets any burst but keeps the deadline`() {
+        val debt = DebtState(burstElapsedMs = 5 * sec, cooldownStartedAtMs = 50 * sec, cooldownUntilMs = 100 * sec)
+        val state = reduce(debt, tick(), 70)
+        assertEquals(0L, state.burstElapsedMs)
+        assertEquals(100 * sec, state.cooldownUntilMs)
     }
 
     @Test
-    fun `locking while serving debt keeps the debt intact`() {
-        val debt = DebtState(debtUntilMs = 100 * sec)
-        val state = DebtReducer.reduce(debt, DebtEvent.Lock, 50 * sec, config)
-        assertEquals(100 * sec, state.debtUntilMs)
+    fun `cooldown clears once its deadline passes`() {
+        val debt = DebtState(cooldownStartedAtMs = 50 * sec, cooldownUntilMs = 100 * sec)
+        val state = reduce(debt, tick(using = false), 100)
+        assertNull(state.cooldownUntilMs)
+        assertFalse(state.inCooldown(100 * sec))
     }
 
     @Test
-    fun `reboot restore is transparent - persisted debt keeps counting down`() {
-        // Simulates state reloaded from DataStore after process death: a tick just resumes it.
-        val restored = DebtState(debtUntilMs = 200 * sec)
-        val stillServing = DebtReducer.reduce(restored, tick(overlay = true), 150 * sec, config)
-        assertEquals(200 * sec, stillServing.debtUntilMs)
+    fun `locking while serving a cooldown keeps it intact`() {
+        val debt = DebtState(cooldownStartedAtMs = 50 * sec, cooldownUntilMs = 100 * sec)
+        val state = reduce(debt, DebtEvent.Lock, 70)
+        assertEquals(100 * sec, state.cooldownUntilMs)
     }
 
     @Test
-    fun `rapid lock unlock does not lose accumulated debt`() {
-        var state = DebtReducer.reduce(DebtState.IDLE, DebtEvent.Unlock(inWindow = true), 0, config)
-        state = DebtReducer.reduce(state, DebtEvent.Lock, 20 * sec, config) // 20s debt
-        val debtUntil = state.debtUntilMs
-        state = DebtReducer.reduce(state, DebtEvent.Unlock(inWindow = true), 25 * sec, config)
-        assertEquals(debtUntil, state.debtUntilMs)
+    fun `a persisted cooldown keeps counting down after a reboot`() {
+        val restored = DebtState(cooldownStartedAtMs = 0, cooldownUntilMs = 200 * sec)
+        val state = reduce(restored, tick(using = false), 150)
+        assertEquals(200 * sec, state.cooldownUntilMs)
+        assertTrue(state.inCooldown(150 * sec))
+    }
+
+    @Test
+    fun `rapid lock unlock does not lose the cooldown`() {
+        var state = reduce(DebtState.IDLE, tick(), 0)
+        state = reduce(state, DebtEvent.Lock, 20) // 20s -> cooldown until 40s
+        val deadline = state.cooldownUntilMs
+        state = reduce(state, tick(using = false), 25) // "unlocked" briefly, still serving
+        assertEquals(deadline, state.cooldownUntilMs)
         assertNull(state.burstStartedAtMs)
+    }
+
+    @Test
+    fun `cooldown remaining fraction drains from one to zero`() {
+        val debt = DebtState(cooldownStartedAtMs = 0, cooldownUntilMs = 100 * sec)
+        assertEquals(1f, debt.cooldownRemainingFraction(0), 0.001f)
+        assertEquals(0.5f, debt.cooldownRemainingFraction(50 * sec), 0.001f)
+        assertEquals(0f, debt.cooldownRemainingFraction(100 * sec), 0.001f)
     }
 }

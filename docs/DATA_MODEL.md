@@ -2,56 +2,62 @@
 
 Two stores with a strict split:
 
-- **Room** (`data/db/`): anything that is a *list of things* — rules, grants, sessions,
-  aggregates, events. Schema JSONs are exported to `app/schemas/` and committed; every schema
-  change ships with a migration (CLAUDE.md invariant #7).
-- **Preferences DataStore** (`data/datastore/`): *scalars only* — settings, checkpoints,
-  the persisted night-debt state. Never lists.
+- **Room** (`data/db/`): anything that is a *list of things* — blocks, exempt apps, sessions,
+  aggregates, events.
+- **Preferences DataStore** (`data/datastore/`): *scalars only* — settings, the ingest
+  checkpoint, the persisted cooldown. Never lists.
 
-## Room entities (target state — introduced milestone by milestone)
+## v2 — usage-debt only
 
-### `block_rules` (M2+)
-| Column | Type | Notes |
-|---|---|---|
-| id | Long PK autogen | |
-| name | String | user-visible label |
-| type | enum `RuleType` | `ALWAYS`, `DAILY_LIMIT`, `SCHEDULE`, `USAGE_DEBT` |
-| enabled | Boolean | |
-| strictness | enum `Strictness` | `TAP_THROUGH`, `FRICTION`, `HARD`. `USAGE_DEBT` is always `HARD`. |
-| limitMinutes | Int? | `DAILY_LIMIT` only |
-| scheduleStartMinuteOfDay | Int? | `SCHEDULE`/`USAGE_DEBT`; window may wrap midnight |
-| scheduleEndMinuteOfDay | Int? | |
-| scheduleDaysMask | Int? | bit 0 = Monday; a wrapping window belongs to its *start* day |
-| maxBurstSeconds | Int? | `USAGE_DEBT` only (default 60) |
-| debtRatio | Float? | `USAGE_DEBT` only (default 1.0 → X s use = X s debt) |
-| deviceWide | Boolean | true for `USAGE_DEBT` (applies to everything minus SafetyDenylist) |
-| frictionDelaySeconds | Int | `FRICTION` unblock wait (default 30) |
-| frictionPhrase | String? | null = default phrase from settings |
-| grantMinutes | Int | how long a successful unblock lasts (default 10) |
-| createdAt / updatedAt | Long | epoch ms |
+v1 shipped a general rule engine (always/limit/schedule blocks with tap/friction/hard bypasses).
+v2 collapses blocking to a single mechanism, the **usage-debt block**. Rather than restructure the
+tables (a structural Room migration cannot be verified without an on-device schema check — there
+is none in CI), the v1 tables are kept **byte-identical** and `MIGRATION_1_2` only *deletes* the
+retired rows (see `Migrations.kt`). The consequences below are the important part:
 
-### `rule_apps` (M2+)
-Composite PK (`ruleId`, `packageName`), FK → `block_rules` ON DELETE CASCADE.
-Empty set + `deviceWide=true` ⇒ rule applies to all apps except the SafetyDenylist.
+- `block_rules` now only ever holds `USAGE_DEBT` rows. The columns `type`, `strictness`,
+  `limitMinutes`, `debtRatio`, `frictionDelaySeconds`, `frictionPhrase`, `grantMinutes`,
+  `deviceWide` are **vestigial**: written with fixed constants by `BlockRepository`
+  (`type = USAGE_DEBT`, `strictness = HARD`, `deviceWide = true`, the rest null/0) and ignored on
+  read. The live columns are `name`, `enabled`, `scheduleStart/EndMinuteOfDay` (the window),
+  `scheduleDaysMask` (start-day mask), `maxBurstSeconds`.
+- `rule_apps` is **repurposed**: it now stores each block's **exempt** packages (apps usable
+  during the block that never accrue debt), not "apps this rule blocks".
+- `unblock_grants` is **unused** (no bypass path exists) but the table + DAO remain so the schema
+  is unchanged. `GrantMethod`, `RuleType`, `Strictness`, `BlockReason` survive as persistence-only
+  enums (StorageEnums.kt) — never rename a constant.
 
-### `unblock_grants` (M4)
-id, packageName, ruleId, grantedAtEpochMs, expiresAtEpochMs, method (`TAP`|`FRICTION`).
-Index (packageName, expiresAtEpochMs). Grants never defeat `HARD` rules.
+A genuine *structural* change from here still requires a real migration and a committed schema
+JSON (CLAUDE.md invariant #7).
 
-### `usage_sessions` (M1+)
-id, packageName, startEpochMs, endEpochMs, dayLocal (`"2026-07-07"`).
-Sessions are **pre-split at local midnight** by `SessionDeriver`, so `dayLocal` is exact.
-Index (dayLocal, packageName) and (endEpochMs).
+## Room entities
 
-### `daily_usage` (M1+)
-Composite PK (dayLocal, packageName): totalMs, sessionCount. Recomputed transactionally by
-the ingester; finalized + pruned by the nightly rollup.
+### `block_rules`
+`id`, `name`, `enabled`, `scheduleStartMinuteOfDay`, `scheduleEndMinuteOfDay`, `scheduleDaysMask`
+(bit 0 = Monday; a wrapping window belongs to its *start* day), `maxBurstSeconds` (default 60),
+`createdAt`/`updatedAt`, plus the vestigial columns above.
 
-### `block_events` (M2+)
-id, packageName, ruleId?, timestampEpochMs, reason (`ALWAYS`|`LIMIT_EXHAUSTED`|`IN_SCHEDULE`|
-`USAGE_DEBT`), outcome (`SHOWN`|`UNBLOCKED_TAP`|`UNBLOCKED_FRICTION`|`ABANDONED`|
-`HOME_KICKED`|`DEBT_SERVED`). Index (timestampEpochMs). Also stores detection latency ms
-for dogfooding metrics.
+### `rule_apps`
+Composite PK (`ruleId`, `packageName`), FK → `block_rules` ON DELETE CASCADE. The exempt-package
+set for a block. Empty ⇒ everything (minus the `SafetyDenylist`) is blocked while the window is
+active.
+
+### `usage_sessions`
+id, packageName, startEpochMs, endEpochMs, dayLocal (`"2026-07-07"`). Sessions are **pre-split at
+local midnight** by `SessionDeriver`. Index (dayLocal, packageName) and (endEpochMs). The overview
+reads these back via `NightTimeline`.
+
+### `daily_usage`
+Composite PK (dayLocal, packageName): totalMs, sessionCount. Recomputed transactionally by the
+ingester; finalized + pruned by the nightly rollup.
+
+### `block_events`
+id, packageName, ruleId?, timestampEpochMs, reason (always `USAGE_DEBT` in v2), outcome
+(`SHOWN` when the lockout appears, `DEBT_SERVED` when a cooldown completes). Index
+(timestampEpochMs).
+
+### `unblock_grants`
+Retained from v1, unused. Pruned by the nightly rollup (a no-op on an empty table).
 
 ## DataStore keys
 
@@ -59,16 +65,17 @@ for dogfooding metrics.
 |---|---|---|
 | onboardingCompleted | Boolean | skip onboarding after first run |
 | lastIngestedEventTime | Long | `UsageStatsIngester` checkpoint (idempotent re-runs) |
-| activeBurstStartedAt | Long? | night-debt: current usage burst start (epoch ms) |
-| debtUntil | Long? | night-debt: lockout end (epoch ms) — survives reboot |
-| defaultFrictionPhrase | String | typed phrase for FRICTION unblocks |
+| openSessions | String | encoded pending open sessions carried across ingest batches |
+| cooldownStartedAt | Long? | usage-debt: current cooldown start (for the indicator drain) |
+| cooldownUntil | Long? | usage-debt: cooldown deadline (epoch ms) — survives reboot |
 | retentionDays | Int | usage/event history retention (default 365) |
-| detectorModeOverride | enum | `AUTO` / `FORCE_POLLING` (debug aid) |
+| forcePollingMode | Boolean | force the polling detector instead of accessibility (debug aid) |
+
+The **burst** (continuous-use accumulator) is deliberately *not* persisted — a process restart
+breaks "continuous", which is the correct behaviour.
 
 ## Time conventions
 
 - Persisted instants are epoch millis (`Long`).
-- Day bucketing is always the **local** calendar day (`dayLocal` string derived from
-  `LocalDate`), never UTC epoch-day — otherwise a timezone change corrupts daily limits.
-- Domain code never reads the clock; `now` is always a parameter (enforced by
-  `DomainPurityTest`).
+- Day bucketing is always the **local** calendar day (`dayLocal` string), never UTC epoch-day.
+- Domain code never reads the clock; `now` is always a parameter (enforced by `DomainPurityTest`).

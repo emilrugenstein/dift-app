@@ -8,7 +8,7 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import app.dift.R
-import app.dift.data.repo.RuleRepository
+import app.dift.data.repo.BlockRepository
 import app.dift.system.monitor.MonitorManager
 import app.dift.system.permissions.PermissionsChecker
 import dagger.assisted.Assisted
@@ -24,15 +24,15 @@ class WatchdogWorker @AssistedInject constructor(
     @Assisted private val context: Context,
     @Assisted params: WorkerParameters,
     private val permissionsChecker: PermissionsChecker,
-    private val ruleRepository: RuleRepository,
+    private val blockRepository: BlockRepository,
     private val monitorManager: MonitorManager,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
         permissionsChecker.refresh()
-        val hasEnabledRule = ruleRepository.rules.first().any { it.enabled }
+        val hasEnabledBlock = blockRepository.blocks.first().any { it.enabled }
         val accessibilityOn = permissionsChecker.state.value.accessibility
-        if (hasEnabledRule && !accessibilityOn) {
+        if (hasEnabledBlock && !accessibilityOn) {
             monitorManager.sync()
             notifyDegraded()
         }

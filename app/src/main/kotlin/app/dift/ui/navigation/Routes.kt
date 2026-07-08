@@ -2,15 +2,13 @@ package app.dift.ui.navigation
 
 // Route constants live here; screens must not hardcode route strings.
 object Routes {
-    const val DASHBOARD = "dashboard"
-    const val APPS = "apps"
-    const val RULES = "rules"
+    const val OVERVIEW = "overview"
+    const val BLOCKS = "blocks"
     const val SETTINGS = "settings"
-    const val HISTORY = "history"
 
-    const val RULE_EDITOR = "rule_editor"
-    const val RULE_EDITOR_ARG = "ruleId"
-    const val RULE_EDITOR_ROUTE = "$RULE_EDITOR?$RULE_EDITOR_ARG={$RULE_EDITOR_ARG}"
+    const val BLOCK_EDITOR = "block_editor"
+    const val BLOCK_EDITOR_ARG = "blockId"
+    const val BLOCK_EDITOR_ROUTE = "$BLOCK_EDITOR?$BLOCK_EDITOR_ARG={$BLOCK_EDITOR_ARG}"
 
-    fun ruleEditor(ruleId: Long = 0): String = "$RULE_EDITOR?$RULE_EDITOR_ARG=$ruleId"
+    fun blockEditor(blockId: Long = 0): String = "$BLOCK_EDITOR?$BLOCK_EDITOR_ARG=$blockId"
 }

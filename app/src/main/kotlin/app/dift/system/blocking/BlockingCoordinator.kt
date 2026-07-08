@@ -2,25 +2,22 @@ package app.dift.system.blocking
 
 import app.dift.data.datastore.SettingsRepository
 import app.dift.data.repo.BlockEventRepository
-import app.dift.data.repo.GrantRepository
-import app.dift.data.repo.RuleRepository
-import app.dift.data.repo.UsageRepository
+import app.dift.data.repo.BlockRepository
+import app.dift.domain.engine.BlockEngine
 import app.dift.domain.engine.DebtReducer
-import app.dift.domain.engine.RuleEngine
-import app.dift.domain.engine.Verdict
+import app.dift.domain.model.Block
 import app.dift.domain.model.BlockOutcome
+import app.dift.domain.model.BlockReason
 import app.dift.domain.model.DebtEvent
 import app.dift.domain.model.DebtState
-import app.dift.domain.model.GrantMethod
-import app.dift.domain.model.Rule
-import app.dift.domain.model.RuleType
-import app.dift.domain.model.Strictness
 import app.dift.system.detect.ForegroundAppTracker
 import app.dift.system.device.DeviceStateMonitor
-import app.dift.system.ingest.UsageStatsIngester
-import app.dift.system.packages.RuntimeDenylistProvider
 import app.dift.system.overlay.BlockScreenContent
+import app.dift.system.overlay.IndicatorContent
+import app.dift.system.overlay.IndicatorOverlayController
+import app.dift.system.overlay.IndicatorState
 import app.dift.system.overlay.OverlayController
+import app.dift.system.packages.RuntimeDenylistProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
@@ -31,54 +28,44 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * The blocking brain (ARCHITECTURE.md). Combines the foreground package with a hot in-memory
- * rule cache (never touches the DB on the hot path), evaluates the pure RuleEngine, and drives
- * the overlay + home-kick. A 1 s ticker re-evaluates while a limit/debt situation is live so
- * blocks fire mid-session, not only on app switch.
- *
- * Home-kick is optional: [homeKick] is wired by the accessibility service when bound, and null
- * in fallback (polling) mode where activity starts are BAL-restricted (ADR-0003).
+ * The blocking brain (ARCHITECTURE.md). Runs the pure usage-debt machine against live device
+ * signals and drives two overlays: the full-screen lockout ([OverlayController]) while a cooldown
+ * is served, and the small corner indicator ([IndicatorOverlayController]) whenever a block window
+ * is active or a cooldown is draining. A 1 s ticker advances the burst/cooldown so blocks fire
+ * mid-use, not only on app switch. No Activity is ever launched (ADR-0003).
  */
 @Singleton
 class BlockingCoordinator @Inject constructor(
     private val tracker: ForegroundAppTracker,
-    private val ruleRepository: RuleRepository,
-    private val grantRepository: GrantRepository,
+    private val blockRepository: BlockRepository,
     private val blockEventRepository: BlockEventRepository,
     private val settings: SettingsRepository,
-    private val ingester: UsageStatsIngester,
-    private val usageRepository: UsageRepository,
     private val overlayController: OverlayController,
+    private val indicatorController: IndicatorOverlayController,
     private val runtimeDenylist: RuntimeDenylistProvider,
     private val deviceStateMonitor: DeviceStateMonitor,
 ) {
     private val scope = CoroutineScope(SupervisorJob())
     private val zone: ZoneId get() = ZoneId.systemDefault()
 
-    private val rulesCache = ruleRepository.rules
+    private val blocksCache = blockRepository.blocks
         .stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     private val debtState = MutableStateFlow(DebtState.IDLE)
-    private var lastUnlocked = false
+    private val indicator = MutableStateFlow<IndicatorState>(IndicatorState.Hidden)
 
-    /** Set by the accessibility service; null while unbound (fallback mode). */
-    @Volatile
-    var homeKick: (() -> Unit)? = null
-
-    private var currentBlockRuleId: Long? = null
+    private var wasAwakeUnlocked = false
+    private var shownCooldownUntil: Long? = null
 
     @Volatile
     private var started = false
-
-    fun updateDebtState(state: DebtState) {
-        debtState.value = state
-    }
 
     /** Idempotent: called by whichever detection service is active; extra calls are no-ops. */
     @Synchronized
@@ -87,176 +74,131 @@ class BlockingCoordinator @Inject constructor(
         started = true
         deviceStateMonitor.start()
         scope.launch { runtimeDenylist.refresh() }
+        scope.launch { restoreCooldown() }
         scope.launch {
-            val burst = settings.activeBurstStartedAt.first()
-            val until = settings.debtUntil.first()
-            debtState.value = DebtState(burst, until)
-            lastUnlocked = deviceStateMonitor.state.value.unlocked
+            combine(tracker.foregroundPackage, blocksCache) { pkg, _ -> pkg }
+                .collect { evaluate(now()) }
         }
+        scope.launch { deviceStateMonitor.state.collect { onDeviceState(it) } }
         scope.launch {
-            combine(tracker.foregroundPackage, rulesCache, debtState) { pkg, rules, debt ->
-                Triple(pkg, rules, debt)
-            }.collect { (pkg, rules, debt) ->
-                evaluateAndAct(pkg, rules, debt)
-            }
-        }
-        scope.launch {
-            deviceStateMonitor.state.collect { device -> onDeviceState(device) }
-        }
-        scope.launch { tickWhileActive() }
-    }
-
-    private suspend fun onDeviceState(device: DeviceStateMonitor.DeviceState) {
-        val rule = debtRule() ?: return
-        val nowMs = System.currentTimeMillis()
-        val event = when {
-            device.unlocked && !lastUnlocked -> DebtEvent.Unlock(inWindow(rule))
-            !device.unlocked && lastUnlocked -> DebtEvent.Lock
-            !device.screenOn -> DebtEvent.Lock
-            else -> null
-        }
-        if (event != null) {
-            applyDebt(DebtReducer.reduce(debtState.value, event, nowMs, debtConfig(rule)))
-        }
-        lastUnlocked = device.unlocked
-    }
-
-    private suspend fun tickWhileActive() {
-        while (scope.isActive) {
-            delay(TICK_MS)
-            tickDebt()
-            val pkg = tracker.foregroundPackage.value
-            if (pkg != null && (overlayController.isShowing || hasTimedRule(rulesCache.value))) {
-                evaluateAndAct(pkg, rulesCache.value, debtState.value)
+            while (scope.isActive) {
+                delay(TICK_MS)
+                tick()
             }
         }
     }
 
-    private suspend fun tickDebt() {
-        val rule = debtRule() ?: return
+    private suspend fun restoreCooldown() {
+        val until = settings.cooldownUntil.first()
+        if (until != null) {
+            debtState.value = DebtState(
+                cooldownStartedAtMs = settings.cooldownStartedAt.first(),
+                cooldownUntilMs = until,
+            )
+        }
         val device = deviceStateMonitor.state.value
-        val nowMs = System.currentTimeMillis()
-        val next = DebtReducer.reduce(
-            debtState.value,
-            DebtEvent.Tick(
-                inWindow = inWindow(rule),
-                unlocked = device.unlocked,
-                overlayShowing = overlayController.isShowing,
-            ),
-            nowMs,
-            debtConfig(rule),
-        )
-        applyDebt(next)
+        wasAwakeUnlocked = device.screenOn && device.unlocked
+        evaluate(now())
     }
 
-    private suspend fun applyDebt(next: DebtState) {
-        if (next == debtState.value) return
+    private fun onDeviceState(device: DeviceStateMonitor.DeviceState) {
+        val nowMs = now()
+        val awakeUnlocked = device.screenOn && device.unlocked
+        if (wasAwakeUnlocked && !awakeUnlocked) {
+            // Locking / screen-off ends the burst and banks it as cooldown (spec §4).
+            applyDebt(DebtReducer.reduce(debtState.value, DebtEvent.Lock, nowMs, configAt(nowMs)), nowMs)
+        }
+        wasAwakeUnlocked = awakeUnlocked
+        evaluate(nowMs)
+    }
+
+    private fun tick() {
+        val nowMs = now()
+        val block = activeBlock(nowMs)
+        val device = deviceStateMonitor.state.value
+        val fg = tracker.foregroundPackage.value
+        val using = block != null && device.unlocked && device.screenOn && !overlayController.isShowing &&
+            fg != null && BlockEngine.isBlockable(fg, block, runtimeDenylist.current())
+        val event = DebtEvent.Tick(inWindow = block != null, using = using)
+        applyDebt(DebtReducer.reduce(debtState.value, event, nowMs, config(block)), nowMs)
+        evaluate(nowMs)
+    }
+
+    /** Persist only the cooldown (the burst is ephemeral) and log when a cooldown is fully served. */
+    private fun applyDebt(next: DebtState, nowMs: Long) {
+        val prev = debtState.value
+        if (next == prev) return
         debtState.value = next
-        settings.setDebtState(next.burstStartedAtMs, next.debtUntilMs)
-    }
-
-    private fun debtRule(): Rule? =
-        rulesCache.value.firstOrNull { it.enabled && it.type == RuleType.USAGE_DEBT }
-
-    private fun inWindow(rule: Rule): Boolean = RuleEngine.scheduleActive(rule, ZonedDateTime.now(zone))
-
-    private fun debtConfig(rule: Rule) = DebtReducer.Config(
-        maxBurstSeconds = rule.maxBurstSeconds ?: Rule.DEFAULT_MAX_BURST_SECONDS,
-        debtRatio = rule.debtRatio ?: Rule.DEFAULT_DEBT_RATIO,
-    )
-
-    private suspend fun evaluateAndAct(packageName: String?, rules: List<Rule>, debt: DebtState) {
-        if (packageName == null) {
-            clearBlock()
-            return
-        }
-        val now = ZonedDateTime.now(zone)
-        val nowMs = now.toInstant().toEpochMilli()
-        val usedTodayMs = usedTodayMs(packageName)
-        val grants = grantRepository.activeAt(nowMs)
-
-        val verdict = RuleEngine.evaluate(
-            RuleEngine.EvaluationInput(
-                packageName = packageName,
-                rules = rules,
-                usedTodayMs = usedTodayMs,
-                activeGrants = grants,
-                debtState = debt,
-                runtimeDenylist = runtimeDenylist.current(),
-                now = now,
-            ),
-        )
-
-        when (verdict) {
-            is Verdict.Allow -> clearBlock()
-            is Verdict.Block -> applyBlock(packageName, verdict, nowMs)
+        if (prev.cooldownUntilMs != next.cooldownUntilMs) {
+            val served = prev.cooldownUntilMs != null && next.cooldownUntilMs == null
+            scope.launch {
+                settings.setCooldown(next.cooldownStartedAtMs, next.cooldownUntilMs)
+                if (served) {
+                    blockEventRepository.log("", null, BlockReason.USAGE_DEBT, BlockOutcome.DEBT_SERVED, nowMs)
+                }
+            }
         }
     }
 
-    private suspend fun applyBlock(packageName: String, verdict: Verdict.Block, nowMs: Long) {
-        val isNewBlock = currentBlockRuleId != verdict.ruleId || !overlayController.isShowing
-        if (!isNewBlock) return
-        currentBlockRuleId = verdict.ruleId
-
-        // Home-kick only for HARD blocks, and only once per block: TAP/FRICTION need the user
-        // to interact with the overlay's unblock UI, which a kick would immediately dismiss
-        // (the launcher is denylisted, so landing home clears the block).
-        if (verdict.strictness == Strictness.HARD) homeKick?.invoke()
-
-        val phrase = settings.defaultFrictionPhrase.first()
-        overlayController.show {
-            BlockScreenContent(
-                verdict = verdict,
-                frictionPhrase = phrase,
-                onUnblock = { method -> unblock(packageName, verdict, method) },
-            )
-        }
-        blockEventRepository.log(
-            packageName = packageName,
-            ruleId = verdict.ruleId,
-            reason = verdict.reason,
-            outcome = BlockOutcome.SHOWN,
-            nowMs = nowMs,
-        )
+    private fun evaluate(nowMs: Long) {
+        val block = activeBlock(nowMs)
+        val state = debtState.value
+        enforce(nowMs, block, state)
+        updateIndicator(nowMs, block, state)
     }
 
-    private fun unblock(packageName: String, verdict: Verdict.Block, method: GrantMethod) {
-        scope.launch {
-            val nowMs = System.currentTimeMillis()
-            grantRepository.grant(packageName, verdict.ruleId, method, verdict.grantMinutes, nowMs)
-            blockEventRepository.log(
-                packageName = packageName,
-                ruleId = verdict.ruleId,
-                reason = verdict.reason,
-                outcome = if (method == GrantMethod.TAP) {
-                    BlockOutcome.UNBLOCKED_TAP
-                } else {
-                    BlockOutcome.UNBLOCKED_FRICTION
-                },
-                nowMs = nowMs,
-            )
-            clearBlock()
+    private fun enforce(nowMs: Long, block: Block?, state: DebtState) {
+        val fg = tracker.foregroundPackage.value
+        val until = state.cooldownUntilMs
+        val blocked = until != null && nowMs < until && fg != null &&
+            BlockEngine.isBlockable(fg, block, runtimeDenylist.current())
+        if (blocked && until != null) {
+            if (!overlayController.isShowing || shownCooldownUntil != until) {
+                shownCooldownUntil = until
+                overlayController.show { BlockScreenContent(blockName = block?.name, cooldownUntilMs = until) }
+                if (fg != null) logEvent(fg, block?.id, BlockOutcome.SHOWN, nowMs)
+            }
+        } else {
+            if (overlayController.isShowing) overlayController.hide()
+            shownCooldownUntil = null
         }
     }
 
-    private fun clearBlock() {
-        if (overlayController.isShowing) overlayController.hide()
-        currentBlockRuleId = null
-    }
-
-    private suspend fun usedTodayMs(packageName: String): Long {
-        val dayLocal = java.time.LocalDate.now(zone).toString()
-        val stored = usageRepository.totalFor(dayLocal, packageName)
-        val open = ingester.openSessionElapsed(packageName, System.currentTimeMillis())
-        return stored + open
-    }
-
-    private fun hasTimedRule(rules: List<Rule>): Boolean =
-        rules.any {
-            it.enabled && (it.type == RuleType.DAILY_LIMIT || it.type == RuleType.USAGE_DEBT)
+    private fun updateIndicator(nowMs: Long, block: Block?, state: DebtState) {
+        val next = when {
+            state.inCooldown(nowMs) -> IndicatorState.Blocked(state.cooldownRemainingFraction(nowMs))
+            block != null -> {
+                val maxMs = (block.maxBurstSeconds * MILLIS_PER_SECOND).toFloat()
+                IndicatorState.Counting((state.liveElapsedMs(nowMs) / maxMs).coerceIn(0f, 1f))
+            }
+            else -> IndicatorState.Hidden
         }
+        indicator.value = next
+        if (next == IndicatorState.Hidden) {
+            indicatorController.hide()
+        } else {
+            indicatorController.show { IndicatorContent(indicator) }
+        }
+    }
+
+    private fun logEvent(pkg: String, blockId: Long?, outcome: BlockOutcome, nowMs: Long) {
+        scope.launch { blockEventRepository.log(pkg, blockId, BlockReason.USAGE_DEBT, outcome, nowMs) }
+    }
+
+    private fun activeBlock(nowMs: Long): Block? =
+        BlockEngine.activeBlock(blocksCache.value, zoned(nowMs))
+
+    private fun config(block: Block?) =
+        DebtReducer.Config(block?.maxBurstSeconds ?: Block.DEFAULT_MAX_BURST_SECONDS)
+
+    private fun configAt(nowMs: Long) = config(activeBlock(nowMs))
+
+    private fun zoned(nowMs: Long): ZonedDateTime = Instant.ofEpochMilli(nowMs).atZone(zone)
+
+    private fun now(): Long = System.currentTimeMillis()
 
     private companion object {
         const val TICK_MS = 1_000L
+        const val MILLIS_PER_SECOND = 1_000L
     }
 }

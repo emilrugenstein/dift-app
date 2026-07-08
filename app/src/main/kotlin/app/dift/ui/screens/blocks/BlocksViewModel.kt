@@ -1,9 +1,9 @@
-package app.dift.ui.screens.rules
+package app.dift.ui.screens.blocks
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import app.dift.data.repo.RuleRepository
-import app.dift.domain.model.Rule
+import app.dift.data.repo.BlockRepository
+import app.dift.domain.model.Block
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -12,21 +12,21 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class RulesViewModel @Inject constructor(
-    private val ruleRepository: RuleRepository,
+class BlocksViewModel @Inject constructor(
+    private val blockRepository: BlockRepository,
 ) : ViewModel() {
 
-    val rules: StateFlow<List<Rule>> = ruleRepository.rules
+    val blocks: StateFlow<List<Block>> = blockRepository.blocks
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
 
-    fun setEnabled(ruleId: Long, enabled: Boolean) {
+    fun setEnabled(blockId: Long, enabled: Boolean) {
         viewModelScope.launch {
-            ruleRepository.setEnabled(ruleId, enabled, System.currentTimeMillis())
+            blockRepository.setEnabled(blockId, enabled, System.currentTimeMillis())
         }
     }
 
-    fun delete(ruleId: Long) {
-        viewModelScope.launch { ruleRepository.delete(ruleId) }
+    fun delete(blockId: Long) {
+        viewModelScope.launch { blockRepository.delete(blockId) }
     }
 
     private companion object {
