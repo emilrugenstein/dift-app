@@ -26,6 +26,14 @@
     <!-- FGS notification visibility on Android 13+. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Re-arm the fallback monitor after reboot. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Battery-optimization exemption prompt (fine for a sideloaded app). -->
+    <uses-permission
+        android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+        tools:ignore="BatteryLife" />
+
     <application
         android:name=".DiftApplication"
         android:allowBackup="false"
@@ -56,17 +64,37 @@
         </provider>
 
         <!--
-            M0 spike: proves a service-drawn Compose overlay with working soft-keyboard input
-            on the target device. Will be replaced by the real blocking service in M2
-            (see docs/features/blocking.md). Blocking never launches an Activity (ADR-0003).
+            Primary foreground-app detector (ADR-0002). canRetrieveWindowContent stays false
+            (config XML, CLAUDE.md invariant #8). Blocking never launches an Activity (ADR-0003).
         -->
         <service
-            android:name=".system.spike.SpikeOverlayService"
+            android:name=".system.accessibility.DiftAccessibilityService"
+            android:exported="false"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <!-- Fallback detector (polling) when accessibility is disabled. -->
+        <service
+            android:name=".system.monitor.FallbackMonitorService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="m0-overlay-spike" />
+                android:value="app-blocking-monitor" />
         </service>
+
+        <receiver
+            android:name=".system.boot.BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

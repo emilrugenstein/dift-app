@@ -2,7 +2,9 @@ package app.dift.ui.screens.apps
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.dift.data.repo.RuleRepository
 import app.dift.data.repo.UsageRepository
+import app.dift.domain.model.RuleType
 import app.dift.system.packages.InstalledApp
 import app.dift.system.packages.InstalledAppsProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -21,10 +23,16 @@ import javax.inject.Inject
 @HiltViewModel
 class AppsViewModel @Inject constructor(
     private val usageRepository: UsageRepository,
+    private val ruleRepository: RuleRepository,
     private val appsProvider: InstalledAppsProvider,
 ) : ViewModel() {
 
-    data class AppRow(val packageName: String, val label: String, val todayMs: Long)
+    data class AppRow(
+        val packageName: String,
+        val label: String,
+        val todayMs: Long,
+        val blockedAlways: Boolean,
+    )
 
     private val today = MutableStateFlow(LocalDate.now().toString())
     private val apps = MutableStateFlow<List<InstalledApp>>(emptyList())
@@ -32,10 +40,21 @@ class AppsViewModel @Inject constructor(
     val state: StateFlow<List<AppRow>> = combine(
         today.flatMapLatest { usageRepository.observeDay(it) },
         apps,
-    ) { day, installed ->
+        ruleRepository.rules,
+    ) { day, installed, rules ->
         val usage = day.associate { it.packageName to it.totalMs }
-        installed.map { AppRow(it.packageName, it.label, usage[it.packageName] ?: 0L) }
-            .sortedByDescending { it.todayMs }
+        val alwaysBlocked = rules
+            .filter { it.type == RuleType.ALWAYS }
+            .flatMap { it.packages }
+            .toSet()
+        installed.map {
+            AppRow(
+                packageName = it.packageName,
+                label = it.label,
+                todayMs = usage[it.packageName] ?: 0L,
+                blockedAlways = it.packageName in alwaysBlocked,
+            )
+        }.sortedByDescending { it.todayMs }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
 
     init {
@@ -44,6 +63,12 @@ class AppsViewModel @Inject constructor(
 
     fun refresh() {
         today.value = LocalDate.now().toString()
+    }
+
+    fun toggleBlock(row: AppRow) {
+        viewModelScope.launch {
+            ruleRepository.quickBlockToggle(row.packageName, row.label, System.currentTimeMillis())
+        }
     }
 
     private companion object {

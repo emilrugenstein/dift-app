@@ -78,5 +78,10 @@ class WorkScheduler @Inject constructor(
             ExistingPeriodicWorkPolicy.KEEP,
             PeriodicWorkRequestBuilder<RollupWorker>(24, TimeUnit.HOURS).build(),
         )
+        workManager.enqueueUniquePeriodicWork(
+            "watchdog",
+            ExistingPeriodicWorkPolicy.KEEP,
+            PeriodicWorkRequestBuilder<WatchdogWorker>(15, TimeUnit.MINUTES).build(),
+        )
     }
 }
