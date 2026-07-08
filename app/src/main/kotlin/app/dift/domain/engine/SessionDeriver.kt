@@ -34,19 +34,21 @@ object SessionDeriver {
         val sessions = mutableListOf<Session>()
 
         for (event in events.sortedBy { it.timestampMs }) {
+            val pkg = event.packageName
             when (event.type) {
-                UsageEventType.RESUMED -> {
-                    val pkg = event.packageName ?: continue
-                    open.putIfAbsent(pkg, event.timestampMs)
-                }
+                UsageEventType.RESUMED ->
+                    if (pkg != null) open.putIfAbsent(pkg, event.timestampMs)
+
                 UsageEventType.PAUSED -> {
-                    val pkg = event.packageName ?: continue
-                    val start = open.remove(pkg) ?: continue
-                    sessions += splitAtMidnights(pkg, start, event.timestampMs, zone)
-                }
-                UsageEventType.SCREEN_OFF, UsageEventType.SHUTDOWN -> {
-                    open.forEach { (pkg, start) ->
+                    val start = if (pkg != null) open.remove(pkg) else null
+                    if (pkg != null && start != null) {
                         sessions += splitAtMidnights(pkg, start, event.timestampMs, zone)
+                    }
+                }
+
+                UsageEventType.SCREEN_OFF, UsageEventType.SHUTDOWN -> {
+                    open.forEach { (openPkg, start) ->
+                        sessions += splitAtMidnights(openPkg, start, event.timestampMs, zone)
                     }
                     open.clear()
                 }

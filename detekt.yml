@@ -20,6 +20,8 @@ complexity:
     constructorThreshold: 10
     ignoreAnnotated: ['Composable']
   TooManyFunctions:
+    thresholdInInterfaces: 20 # Room DAOs legitimately have many query methods
+    thresholdInClasses: 20
     ignoreAnnotatedFunctions: ['Preview']
 
 naming:

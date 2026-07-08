@@ -20,6 +20,9 @@ class UsageDaoTest {
 
     private lateinit var db: DiftDatabase
 
+    private fun session(pkg: String, startMs: Long, endMs: Long, day: String) =
+        UsageSessionEntity(packageName = pkg, startEpochMs = startMs, endEpochMs = endMs, dayLocal = day)
+
     @Before
     fun setUp() {
         val context = ApplicationProvider.getApplicationContext<Context>()
@@ -38,9 +41,9 @@ class UsageDaoTest {
         val dao = db.usageDao()
         dao.insertSessions(
             listOf(
-                UsageSessionEntity(packageName = "com.a", startEpochMs = 0, endEpochMs = 60_000, dayLocal = "2026-07-07"),
-                UsageSessionEntity(packageName = "com.a", startEpochMs = 100_000, endEpochMs = 160_000, dayLocal = "2026-07-07"),
-                UsageSessionEntity(packageName = "com.b", startEpochMs = 0, endEpochMs = 30_000, dayLocal = "2026-07-07"),
+                session("com.a", 0, 60_000, "2026-07-07"),
+                session("com.a", 100_000, 160_000, "2026-07-07"),
+                session("com.b", 0, 30_000, "2026-07-07"),
             ),
         )
         dao.recomputeDay("2026-07-07")
@@ -56,11 +59,7 @@ class UsageDaoTest {
     @Test
     fun `recomputeDay is idempotent`() = runTest {
         val dao = db.usageDao()
-        dao.insertSessions(
-            listOf(
-                UsageSessionEntity(packageName = "com.a", startEpochMs = 0, endEpochMs = 60_000, dayLocal = "2026-07-07"),
-            ),
-        )
+        dao.insertSessions(listOf(session("com.a", 0, 60_000, "2026-07-07")))
         dao.recomputeDay("2026-07-07")
         dao.recomputeDay("2026-07-07")
 
@@ -74,9 +73,9 @@ class UsageDaoTest {
         val dao = db.usageDao()
         dao.insertSessions(
             listOf(
-                UsageSessionEntity(packageName = "com.a", startEpochMs = 0, endEpochMs = 60_000, dayLocal = "2026-07-06"),
-                UsageSessionEntity(packageName = "com.a", startEpochMs = 0, endEpochMs = 60_000, dayLocal = "2026-07-07"),
-                UsageSessionEntity(packageName = "com.b", startEpochMs = 0, endEpochMs = 30_000, dayLocal = "2026-07-07"),
+                session("com.a", 0, 60_000, "2026-07-06"),
+                session("com.a", 0, 60_000, "2026-07-07"),
+                session("com.b", 0, 30_000, "2026-07-07"),
             ),
         )
         dao.recomputeDay("2026-07-06")
@@ -93,8 +92,8 @@ class UsageDaoTest {
         val dao = db.usageDao()
         dao.insertSessions(
             listOf(
-                UsageSessionEntity(packageName = "com.a", startEpochMs = 0, endEpochMs = 1_000, dayLocal = "2026-01-01"),
-                UsageSessionEntity(packageName = "com.a", startEpochMs = 0, endEpochMs = 1_000, dayLocal = "2026-07-07"),
+                session("com.a", 0, 1_000, "2026-01-01"),
+                session("com.a", 0, 1_000, "2026-07-07"),
             ),
         )
         dao.recomputeDay("2026-01-01")
