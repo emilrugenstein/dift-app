@@ -6,9 +6,11 @@ When the foreground app has a `Block` verdict:
 
 1. The full-screen block overlay appears within 500 ms of the app reaching the foreground
    (smoke-test item 6), drawn via `OverlayComposeHost` — never an Activity (ADR-0003).
-2. If the accessibility service is bound, a home-kick (`GLOBAL_ACTION_HOME`) fires as the
-   primary enforcement; the overlay is the explanation the user sees. In fallback (polling)
-   mode there is no home-kick — overlay only.
+2. Home-kick (`GLOBAL_ACTION_HOME`) fires **only for HARD blocks**, once per block, and only
+   while the accessibility service is bound (fallback mode is overlay-only). TAP/FRICTION
+   blocks never kick: the user must be able to interact with the overlay's unblock UI, and
+   the launcher is denylisted so landing home clears the block. The home screen is always
+   reachable — the user leaves a block by pressing home themselves.
 3. Enforcement re-fires on every window event while the verdict holds (defeats fast re-entry
    and overlay-over-overlay races).
 4. Every enforcement writes a `block_events` row (reason, outcome, detection latency ms).

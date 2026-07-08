@@ -14,9 +14,11 @@ import app.dift.domain.model.DebtState
 import app.dift.domain.model.GrantMethod
 import app.dift.domain.model.Rule
 import app.dift.domain.model.RuleType
+import app.dift.domain.model.Strictness
 import app.dift.system.detect.ForegroundAppTracker
 import app.dift.system.device.DeviceStateMonitor
 import app.dift.system.ingest.UsageStatsIngester
+import app.dift.system.packages.RuntimeDenylistProvider
 import app.dift.system.overlay.BlockScreenContent
 import app.dift.system.overlay.OverlayController
 import kotlinx.coroutines.CoroutineScope
@@ -53,6 +55,7 @@ class BlockingCoordinator @Inject constructor(
     private val ingester: UsageStatsIngester,
     private val usageRepository: UsageRepository,
     private val overlayController: OverlayController,
+    private val runtimeDenylist: RuntimeDenylistProvider,
     private val deviceStateMonitor: DeviceStateMonitor,
 ) {
     private val scope = CoroutineScope(SupervisorJob())
@@ -83,6 +86,7 @@ class BlockingCoordinator @Inject constructor(
         if (started) return
         started = true
         deviceStateMonitor.start()
+        scope.launch { runtimeDenylist.refresh() }
         scope.launch {
             val burst = settings.activeBurstStartedAt.first()
             val until = settings.debtUntil.first()
@@ -178,7 +182,7 @@ class BlockingCoordinator @Inject constructor(
                 usedTodayMs = usedTodayMs,
                 activeGrants = grants,
                 debtState = debt,
-                runtimeDenylist = emptySet(),
+                runtimeDenylist = runtimeDenylist.current(),
                 now = now,
             ),
         )
@@ -190,25 +194,30 @@ class BlockingCoordinator @Inject constructor(
     }
 
     private suspend fun applyBlock(packageName: String, verdict: Verdict.Block, nowMs: Long) {
-        homeKick?.invoke()
-        if (currentBlockRuleId != verdict.ruleId || !overlayController.isShowing) {
-            currentBlockRuleId = verdict.ruleId
-            val phrase = settings.defaultFrictionPhrase.first()
-            overlayController.show {
-                BlockScreenContent(
-                    verdict = verdict,
-                    frictionPhrase = phrase,
-                    onUnblock = { method -> unblock(packageName, verdict, method) },
-                )
-            }
-            blockEventRepository.log(
-                packageName = packageName,
-                ruleId = verdict.ruleId,
-                reason = verdict.reason,
-                outcome = BlockOutcome.SHOWN,
-                nowMs = nowMs,
+        val isNewBlock = currentBlockRuleId != verdict.ruleId || !overlayController.isShowing
+        if (!isNewBlock) return
+        currentBlockRuleId = verdict.ruleId
+
+        // Home-kick only for HARD blocks, and only once per block: TAP/FRICTION need the user
+        // to interact with the overlay's unblock UI, which a kick would immediately dismiss
+        // (the launcher is denylisted, so landing home clears the block).
+        if (verdict.strictness == Strictness.HARD) homeKick?.invoke()
+
+        val phrase = settings.defaultFrictionPhrase.first()
+        overlayController.show {
+            BlockScreenContent(
+                verdict = verdict,
+                frictionPhrase = phrase,
+                onUnblock = { method -> unblock(packageName, verdict, method) },
             )
         }
+        blockEventRepository.log(
+            packageName = packageName,
+            ruleId = verdict.ruleId,
+            reason = verdict.reason,
+            outcome = BlockOutcome.SHOWN,
+            nowMs = nowMs,
+        )
     }
 
     private fun unblock(packageName: String, verdict: Verdict.Block, method: GrantMethod) {

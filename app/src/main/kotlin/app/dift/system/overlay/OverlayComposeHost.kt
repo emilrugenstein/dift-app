@@ -56,6 +56,11 @@ class OverlayComposeHost(private val context: Context) {
             PixelFormat.TRANSLUCENT,
         ).apply {
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+            // True edge-to-edge: draw behind status + navigation bars and into the cutout.
+            // Content keeps itself readable via safeDrawingPadding() inside the composable.
+            fitInsetsTypes = 0
+            layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
         }
 
         windowManager.addView(composeView, params)
