@@ -6,11 +6,11 @@ import app.dift.domain.model.DebtState
 /**
  * Pure state machine for usage-debt (docs/features/usage-debt.md, ADR-0004).
  *
- * A burst accumulates while [DebtEvent.Tick.accruing] holds; pausing (accruing = false) banks the
- * segment without resetting it, so "continuous" survives a glance at an exempt app. Reaching the
- * cap — or a [DebtEvent.Lock] mid-burst — converts the elapsed time 1:1 into a cooldown: an
- * absolute deadline that counts down regardless of screen/lock state. While serving a cooldown no
- * burst accrues (overlay time is free).
+ * A burst accumulates while a tick is `using`; pausing (`using = false`, still in-window) banks the
+ * segment without resetting it, so "continuous" survives a glance at an exempt app. Leaving the
+ * window cancels the burst with no debt. Reaching the cap — or a [DebtEvent.Lock] mid-burst —
+ * converts the elapsed time 1:1 into a cooldown: an absolute deadline that counts down regardless
+ * of screen/lock state. While serving a cooldown no burst accrues (overlay time is free).
  */
 object DebtReducer {
 

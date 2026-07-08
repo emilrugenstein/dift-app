@@ -16,7 +16,7 @@ import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
 
 /**
- * Every 15 min: if any rule is enabled but the accessibility service is off, make sure the
+ * Every 15 min: if any block is enabled but the accessibility service is off, make sure the
  * fallback is running and warn the user (blocking is degraded). ADR-0002.
  */
 @HiltWorker
