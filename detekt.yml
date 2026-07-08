@@ -19,7 +19,8 @@ complexity:
     functionThreshold: 8
     constructorThreshold: 10
     ignoreDefaultParameters: true # data-class models and test builders lean on defaults
-    ignoreAnnotated: ['Composable']
+    # Hilt @Inject constructors list collaborators, not call-site burden.
+    ignoreAnnotated: ['Composable', 'Inject']
   TooManyFunctions:
     thresholdInInterfaces: 20 # Room DAOs legitimately have many query methods
     thresholdInClasses: 20
