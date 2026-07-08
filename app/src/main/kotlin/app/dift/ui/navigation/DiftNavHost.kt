@@ -29,8 +29,11 @@ import app.dift.ui.screens.apps.AppsScreen
 import app.dift.ui.screens.dashboard.DashboardScreen
 import app.dift.ui.screens.history.HistoryScreen
 import app.dift.ui.screens.onboarding.OnboardingScreen
+import app.dift.ui.screens.ruleeditor.RuleEditorScreen
 import app.dift.ui.screens.rules.RulesScreen
 import app.dift.ui.screens.settings.SettingsScreen
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 
 private data class NavDestination(
     val route: String,
@@ -97,9 +100,25 @@ private fun MainScaffold() {
             composable(Routes.DASHBOARD) { DashboardScreen() }
             composable(Routes.APPS) { AppsScreen() }
             composable(Routes.RULES) {
-                RulesScreen(onOpenHistory = { navController.navigate(Routes.HISTORY) })
+                RulesScreen(
+                    onOpenHistory = { navController.navigate(Routes.HISTORY) },
+                    onAddRule = { navController.navigate(Routes.ruleEditor()) },
+                    onEditRule = { ruleId -> navController.navigate(Routes.ruleEditor(ruleId)) },
+                )
             }
             composable(Routes.HISTORY) { HistoryScreen() }
+            composable(
+                route = Routes.RULE_EDITOR_ROUTE,
+                arguments = listOf(
+                    navArgument(Routes.RULE_EDITOR_ARG) {
+                        type = NavType.LongType
+                        defaultValue = 0L
+                    },
+                ),
+            ) { entry ->
+                val ruleId = entry.arguments?.getLong(Routes.RULE_EDITOR_ARG) ?: 0L
+                RuleEditorScreen(ruleId = ruleId, onSaved = { navController.popBackStack() })
+            }
             composable(Routes.SETTINGS) { SettingsScreen() }
         }
     }

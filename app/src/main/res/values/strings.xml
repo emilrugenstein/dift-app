@@ -27,9 +27,26 @@
 
     <!-- Rules -->
     <string name="rules_title">Rules</string>
-    <string name="rules_empty">No rules yet. Add one by blocking an app on the Apps tab.</string>
+    <string name="rules_empty">No rules yet. Add one below, or block an app from the Apps tab.</string>
     <string name="rules_open_history">History</string>
+    <string name="rules_add">Add rule</string>
     <string name="rules_delete">Delete</string>
+
+    <!-- Rule editor -->
+    <string name="editor_name_label">Rule name</string>
+    <string name="editor_type_always">Always</string>
+    <string name="editor_type_limit">Daily limit</string>
+    <string name="editor_type_schedule">Schedule</string>
+    <string name="editor_strictness_tap">Tap</string>
+    <string name="editor_strictness_friction">Friction</string>
+    <string name="editor_strictness_hard">Hard</string>
+    <string name="editor_strictness_hard_warning">Hard blocks cannot be lifted until the condition ends. Configure carefully.</string>
+    <string name="editor_limit_label">Minutes per day</string>
+    <string name="editor_schedule_start">Start</string>
+    <string name="editor_schedule_end">End</string>
+    <string name="editor_day_initials">M,T,W,T,F,S,S</string>
+    <string name="editor_apps_label">Apps this rule blocks</string>
+    <string name="editor_save">Save rule</string>
     <string name="rule_subtitle_always">Always blocked</string>
     <string name="rule_subtitle_limit">Daily limit · %1$d min</string>
     <string name="rule_subtitle_schedule">Scheduled</string>

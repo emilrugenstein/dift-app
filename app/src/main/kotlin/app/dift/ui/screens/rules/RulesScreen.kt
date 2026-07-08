@@ -1,5 +1,6 @@
 package app.dift.ui.screens.rules
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -27,6 +29,8 @@ import app.dift.domain.model.RuleType
 @Composable
 fun RulesScreen(
     onOpenHistory: () -> Unit,
+    onAddRule: () -> Unit,
+    onEditRule: (Long) -> Unit,
     viewModel: RulesViewModel = hiltViewModel(),
 ) {
     val rules by viewModel.rules.collectAsStateWithLifecycle()
@@ -51,6 +55,11 @@ fun RulesScreen(
                 }
             }
         }
+        item {
+            Button(onClick = onAddRule, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.rules_add))
+            }
+        }
         if (rules.isEmpty()) {
             item {
                 Text(
@@ -62,6 +71,7 @@ fun RulesScreen(
         items(rules, key = { it.id }) { rule ->
             RuleRow(
                 rule = rule,
+                onEdit = { onEditRule(rule.id) },
                 onToggle = { viewModel.setEnabled(rule.id, it) },
                 onDelete = { viewModel.delete(rule.id) },
             )
@@ -70,9 +80,16 @@ fun RulesScreen(
 }
 
 @Composable
-private fun RuleRow(rule: Rule, onToggle: (Boolean) -> Unit, onDelete: () -> Unit) {
+private fun RuleRow(
+    rule: Rule,
+    onEdit: () -> Unit,
+    onToggle: (Boolean) -> Unit,
+    onDelete: () -> Unit,
+) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = rule.type != RuleType.USAGE_DEBT, onClick = onEdit),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
