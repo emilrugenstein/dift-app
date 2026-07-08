@@ -19,6 +19,7 @@
     <string name="dashboard_top_apps_title">Top apps</string>
     <string name="dashboard_empty">No usage recorded yet. Data appears a few minutes after granting usage access.</string>
     <string name="dashboard_usage_access_missing">Dift needs usage access to measure screen time. Everything stays on this device.</string>
+    <string name="dashboard_range_days">%1$d days</string>
 
     <!-- Apps -->
     <string name="apps_title">All apps · today</string>

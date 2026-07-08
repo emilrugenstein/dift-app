@@ -7,17 +7,26 @@ late-night use costs an equal second of lockout.
 Built for a single device (Fairphone 6, Android 15/16). No accounts, no cloud, no analytics,
 no network permission at all: everything the app knows stays on the phone.
 
-## Features (by milestone)
+## Features
 
-- **M0** — app shell, CI, release pipeline, overlay tech spike ← *current*
-- **M1** — permissions onboarding + screen-time dashboard (event-derived, accurate)
-- **M2** — manual blocklist: instant full-screen block when a listed app opens
-- **M3** — night usage-debt mode: after 22:30, every usage burst (max 60 s) is punished with
-  an equal-length device-wide lockout; only lockscreen functions (SOS, flashlight, camera)
-  stay available
-- **M4** — daily time limits, schedule windows, per-rule strictness (tap / friction / hard),
-  block history
-- **M5** — polish: trends, battery audit, final icon
+- **Screen-time dashboard** — today's total, top apps, and a 7- or 30-day trend, derived
+  from usage events for accuracy (not the coarse system buckets).
+- **Permissions onboarding** — a guided checklist, including the Android 13+ restricted-settings
+  walkthrough that sideloaded apps need for accessibility.
+- **Manual blocklist** — instant full-screen block (overlay + home-kick) when a listed app opens.
+- **Daily limits & schedules** — per-app time budgets and time-window blocks.
+- **Night usage-debt mode** — after 22:30, every usage burst (max 60 s) is punished with an
+  equal-length device-wide lockout; enforcement is unlock-gated, so SOS calls, the flashlight
+  tile, and the lockscreen camera stay available.
+- **Per-rule strictness** — tap-to-unblock, friction (wait + typed phrase), or hard lockout.
+- **Block history** — a timeline of every block and how it was resolved.
+
+Everything runs locally. There is no network permission in the manifest, by design.
+
+### Build status
+
+Milestones M0–M5 are implemented. Remaining before a `v1.0.0` release: on-device smoke
+testing (docs/SMOKE_TEST.md) and the signing keystore + GitHub secrets (docs/RELEASING.md).
 
 ## Install & update (Obtainium)
 

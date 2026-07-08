@@ -39,27 +39,31 @@ class DashboardViewModel @Inject constructor(
     data class UiState(
         val usageAccessGranted: Boolean = true,
         val todayTotalMs: Long = 0,
+        val rangeDays: Int = 7,
         val topApps: List<AppUsage> = emptyList(),
         val week: List<DayBar> = emptyList(),
     )
 
     private val today = MutableStateFlow(LocalDate.now().toString())
     private val labels = MutableStateFlow<Map<String, String>>(emptyMap())
+    private val rangeDays = MutableStateFlow(WEEK_SPAN)
 
     val state: StateFlow<UiState> = combine(
         today.flatMapLatest { usageRepository.observeDay(it) },
-        today.flatMapLatest { day ->
-            usageRepository.observeDayTotals(LocalDate.parse(day).minusDays(WEEK_SPAN).toString())
+        combine(today, rangeDays) { day, range -> day to range }.flatMapLatest { (day, range) ->
+            usageRepository.observeDayTotals(LocalDate.parse(day).minusDays(range).toString())
         },
         labels,
+        rangeDays,
         permissionsChecker.state,
-    ) { day, dayTotals, labelMap, permissions ->
+    ) { day, dayTotals, labelMap, range, permissions ->
         val topTotal = day.firstOrNull()?.totalMs ?: 0L
         val totalsByDay = dayTotals.associate { it.dayLocal to it.totalMs }
         val todayDate = LocalDate.parse(today.value)
         UiState(
             usageAccessGranted = permissions.usageAccess,
             todayTotalMs = day.sumOf { it.totalMs },
+            rangeDays = range.toInt() + 1,
             topApps = day.take(TOP_APPS).map {
                 AppUsage(
                     packageName = it.packageName,
@@ -68,12 +72,16 @@ class DashboardViewModel @Inject constructor(
                     fractionOfTop = if (topTotal > 0) it.totalMs.toFloat() / topTotal else 0f,
                 )
             },
-            week = (WEEK_SPAN downTo 0).map { offset ->
+            week = (range downTo 0).map { offset ->
                 val date = todayDate.minusDays(offset).toString()
                 DayBar(date, totalsByDay[date] ?: 0L)
             },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), UiState())
+
+    fun setRange(days: Int) {
+        rangeDays.value = (days - 1).toLong()
+    }
 
     init {
         viewModelScope.launch {

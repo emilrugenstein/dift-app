@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -63,6 +64,7 @@ fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
                 style = MaterialTheme.typography.displayMedium,
             )
         }
+        item { RangeToggle(state.rangeDays, viewModel::setRange) }
         item { WeekBars(state.week) }
         item {
             Spacer(Modifier.height(8.dp))
@@ -105,6 +107,19 @@ private fun AppUsageRow(app: DashboardViewModel.AppUsage) {
 }
 
 @Composable
+private fun RangeToggle(rangeDays: Int, onSelect: (Int) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf(WEEK_RANGE, MONTH_RANGE).forEach { days ->
+            FilterChip(
+                selected = rangeDays == days,
+                onClick = { onSelect(days) },
+                label = { Text(stringResource(R.string.dashboard_range_days, days)) },
+            )
+        }
+    }
+}
+
+@Composable
 private fun WeekBars(week: List<DashboardViewModel.DayBar>) {
     val max = week.maxOfOrNull { it.totalMs }?.coerceAtLeast(1L) ?: 1L
     Row(
@@ -127,11 +142,13 @@ private fun WeekBars(week: List<DashboardViewModel.DayBar>) {
                         .clip(RoundedCornerShape(3.dp))
                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)),
                 )
-                Text(
-                    text = LocalDate.parse(day.dayLocal).dayOfWeek.name.take(1),
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
+                if (week.size <= WEEK_RANGE) {
+                    Text(
+                        text = LocalDate.parse(day.dayLocal).dayOfWeek.name.take(1),
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
             }
         }
     }
@@ -162,3 +179,5 @@ private fun UsageAccessMissing() {
 }
 
 private const val BAR_MAX_DP = 64f
+private const val WEEK_RANGE = 7
+private const val MONTH_RANGE = 30
