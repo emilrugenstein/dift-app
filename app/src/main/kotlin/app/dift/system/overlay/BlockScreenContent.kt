@@ -1,6 +1,5 @@
 package app.dift.system.overlay
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,6 +10,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -47,34 +47,49 @@ fun BlockScreenContent(
     onUnblock: (GrantMethod) -> Unit,
 ) {
     DiftTheme {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .safeDrawingPadding()
-                .imePadding()
-                .padding(24.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
+        // Surface (not a raw background modifier) so LocalContentColor is set correctly —
+        // otherwise text renders default-black on the dark background.
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background,
         ) {
-            Text(
-                text = stringResource(R.string.block_title),
-                style = MaterialTheme.typography.headlineMedium,
-                textAlign = TextAlign.Center,
-            )
-            Text(
-                text = reasonText(verdict),
-                style = MaterialTheme.typography.bodyLarge,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(vertical = 16.dp),
-            )
-
-            when (verdict.strictness) {
-                Strictness.TAP_THROUGH -> TapUnblock(onUnblock)
-                Strictness.FRICTION -> FrictionUnblock(verdict, frictionPhrase, onUnblock)
-                Strictness.HARD -> HardBlock(verdict)
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .safeDrawingPadding()
+                    .imePadding()
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                BlockScreenBody(verdict, frictionPhrase, onUnblock)
             }
         }
+    }
+}
+
+@Composable
+private fun BlockScreenBody(
+    verdict: Verdict.Block,
+    frictionPhrase: String,
+    onUnblock: (GrantMethod) -> Unit,
+) {
+    Text(
+        text = stringResource(R.string.block_title),
+        style = MaterialTheme.typography.headlineMedium,
+        textAlign = TextAlign.Center,
+    )
+    Text(
+        text = reasonText(verdict),
+        style = MaterialTheme.typography.bodyLarge,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.padding(vertical = 16.dp),
+    )
+
+    when (verdict.strictness) {
+        Strictness.TAP_THROUGH -> TapUnblock(onUnblock)
+        Strictness.FRICTION -> FrictionUnblock(verdict, frictionPhrase, onUnblock)
+        Strictness.HARD -> HardBlock(verdict)
     }
 }
 
