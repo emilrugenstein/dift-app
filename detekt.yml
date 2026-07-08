@@ -18,6 +18,7 @@ complexity:
   LongParameterList:
     functionThreshold: 8
     constructorThreshold: 10
+    ignoreDefaultParameters: true # data-class models and test builders lean on defaults
     ignoreAnnotated: ['Composable']
   TooManyFunctions:
     thresholdInInterfaces: 20 # Room DAOs legitimately have many query methods

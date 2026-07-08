@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -42,7 +43,6 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun BlockScreenContent(
     verdict: Verdict.Block,
-    packageName: String,
     frictionPhrase: String,
     onUnblock: (GrantMethod) -> Unit,
 ) {
@@ -137,16 +137,34 @@ private fun FrictionUnblock(
 @Composable
 private fun HardBlock(verdict: Verdict.Block) {
     val until = verdict.blockedUntilMs
-    val text = if (until != null) {
+    if (until == null) {
+        Text(
+            text = stringResource(R.string.block_hard_no_end),
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center,
+        )
+        return
+    }
+
+    // Live countdown for short lockouts (usage-debt); a wall-clock time for long schedules.
+    var remainingMs by remember(until) { mutableLongStateOf(until - System.currentTimeMillis()) }
+    LaunchedEffect(until) {
+        while (remainingMs > 0) {
+            delay(ONE_SECOND_MS)
+            remainingMs = until - System.currentTimeMillis()
+        }
+    }
+
+    val text = if (remainingMs in 1..COUNTDOWN_THRESHOLD_MS) {
+        stringResource(R.string.block_hard_countdown, (remainingMs / ONE_SECOND_MS) + 1)
+    } else {
         val time = Instant.ofEpochMilli(until).atZone(ZoneId.systemDefault())
             .format(DateTimeFormatter.ofPattern("HH:mm"))
         stringResource(R.string.block_hard_until, time)
-    } else {
-        stringResource(R.string.block_hard_no_end)
     }
     Text(
         text = text,
-        style = MaterialTheme.typography.titleMedium,
+        style = MaterialTheme.typography.titleLarge,
         textAlign = TextAlign.Center,
     )
 }
@@ -160,3 +178,4 @@ private fun reasonText(verdict: Verdict.Block): String = when (verdict.reason) {
 }
 
 private const val ONE_SECOND_MS = 1_000L
+private const val COUNTDOWN_THRESHOLD_MS = 10 * 60 * 1_000L

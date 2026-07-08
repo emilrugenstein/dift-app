@@ -49,6 +49,7 @@
     <string name="block_friction_wait">Wait %1$d s…</string>
     <string name="block_friction_type_phrase">Type this to continue: \"%1$s\"</string>
     <string name="block_hard_until">Locked until %1$s.</string>
+    <string name="block_hard_countdown">%1$d s remaining</string>
     <string name="block_hard_no_end">Locked until the condition ends.</string>
 
     <!-- Onboarding -->
@@ -69,6 +70,9 @@
     <string name="settings_permission_accessibility">Accessibility service</string>
     <string name="settings_permission_battery">Battery optimization exemption</string>
     <string name="settings_open">Open</string>
+    <string name="settings_night_mode_title">Night mode</string>
+    <string name="settings_night_mode_label">Usage-debt after 22:30</string>
+    <string name="settings_night_mode_description">Every second of use between 22:30 and 06:00 is repaid with an equal lockout (max 60 s bursts). Only unlocked use counts — SOS, flashlight and lockscreen camera stay free.</string>
     <string name="home_version_label">Version %s</string>
 
     <!-- Accessibility service -->

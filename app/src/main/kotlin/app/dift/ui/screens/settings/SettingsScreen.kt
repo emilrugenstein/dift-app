@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +18,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,6 +36,7 @@ import app.dift.R
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val permissions by viewModel.permissions.collectAsStateWithLifecycle()
+    val nightMode by viewModel.nightModeEnabled.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val packageUri = Uri.parse("package:${context.packageName}")
 
@@ -90,6 +93,31 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 granted = permissions.batteryExempt,
             ) {
                 context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            }
+        }
+        item { HorizontalDivider() }
+        item {
+            Text(
+                text = stringResource(R.string.settings_night_mode_title),
+                style = MaterialTheme.typography.titleMedium,
+            )
+        }
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.settings_night_mode_label),
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_night_mode_description),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Switch(checked = nightMode, onCheckedChange = viewModel::setNightMode)
             }
         }
         item { HorizontalDivider() }

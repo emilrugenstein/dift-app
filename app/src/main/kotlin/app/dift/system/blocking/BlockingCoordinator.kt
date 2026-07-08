@@ -5,14 +5,17 @@ import app.dift.data.repo.BlockEventRepository
 import app.dift.data.repo.GrantRepository
 import app.dift.data.repo.RuleRepository
 import app.dift.data.repo.UsageRepository
+import app.dift.domain.engine.DebtReducer
 import app.dift.domain.engine.RuleEngine
 import app.dift.domain.engine.Verdict
 import app.dift.domain.model.BlockOutcome
+import app.dift.domain.model.DebtEvent
 import app.dift.domain.model.DebtState
 import app.dift.domain.model.GrantMethod
 import app.dift.domain.model.Rule
 import app.dift.domain.model.RuleType
 import app.dift.system.detect.ForegroundAppTracker
+import app.dift.system.device.DeviceStateMonitor
 import app.dift.system.ingest.UsageStatsIngester
 import app.dift.system.overlay.BlockScreenContent
 import app.dift.system.overlay.OverlayController
@@ -50,6 +53,7 @@ class BlockingCoordinator @Inject constructor(
     private val ingester: UsageStatsIngester,
     private val usageRepository: UsageRepository,
     private val overlayController: OverlayController,
+    private val deviceStateMonitor: DeviceStateMonitor,
 ) {
     private val scope = CoroutineScope(SupervisorJob())
     private val zone: ZoneId get() = ZoneId.systemDefault()
@@ -58,6 +62,7 @@ class BlockingCoordinator @Inject constructor(
         .stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     private val debtState = MutableStateFlow(DebtState.IDLE)
+    private var lastUnlocked = false
 
     /** Set by the accessibility service; null while unbound (fallback mode). */
     @Volatile
@@ -77,6 +82,13 @@ class BlockingCoordinator @Inject constructor(
     fun start() {
         if (started) return
         started = true
+        deviceStateMonitor.start()
+        scope.launch {
+            val burst = settings.activeBurstStartedAt.first()
+            val until = settings.debtUntil.first()
+            debtState.value = DebtState(burst, until)
+            lastUnlocked = deviceStateMonitor.state.value.unlocked
+        }
         scope.launch {
             combine(tracker.foregroundPackage, rulesCache, debtState) { pkg, rules, debt ->
                 Triple(pkg, rules, debt)
@@ -84,18 +96,70 @@ class BlockingCoordinator @Inject constructor(
                 evaluateAndAct(pkg, rules, debt)
             }
         }
+        scope.launch {
+            deviceStateMonitor.state.collect { device -> onDeviceState(device) }
+        }
         scope.launch { tickWhileActive() }
+    }
+
+    private suspend fun onDeviceState(device: DeviceStateMonitor.DeviceState) {
+        val rule = debtRule() ?: return
+        val nowMs = System.currentTimeMillis()
+        val event = when {
+            device.unlocked && !lastUnlocked -> DebtEvent.Unlock(inWindow(rule))
+            !device.unlocked && lastUnlocked -> DebtEvent.Lock
+            !device.screenOn -> DebtEvent.Lock
+            else -> null
+        }
+        if (event != null) {
+            applyDebt(DebtReducer.reduce(debtState.value, event, nowMs, debtConfig(rule)))
+        }
+        lastUnlocked = device.unlocked
     }
 
     private suspend fun tickWhileActive() {
         while (scope.isActive) {
             delay(TICK_MS)
+            tickDebt()
             val pkg = tracker.foregroundPackage.value
             if (pkg != null && (overlayController.isShowing || hasTimedRule(rulesCache.value))) {
                 evaluateAndAct(pkg, rulesCache.value, debtState.value)
             }
         }
     }
+
+    private suspend fun tickDebt() {
+        val rule = debtRule() ?: return
+        val device = deviceStateMonitor.state.value
+        val nowMs = System.currentTimeMillis()
+        val next = DebtReducer.reduce(
+            debtState.value,
+            DebtEvent.Tick(
+                inWindow = inWindow(rule),
+                unlocked = device.unlocked,
+                overlayShowing = overlayController.isShowing,
+            ),
+            nowMs,
+            debtConfig(rule),
+        )
+        applyDebt(next)
+    }
+
+    private suspend fun applyDebt(next: DebtState) {
+        if (next == debtState.value) return
+        debtState.value = next
+        settings.setDebtState(next.burstStartedAtMs, next.debtUntilMs)
+    }
+
+    private fun debtRule(): Rule? =
+        rulesCache.value.firstOrNull { it.enabled && it.type == RuleType.USAGE_DEBT }
+
+    private fun inWindow(rule: Rule): Boolean = RuleEngine.scheduleActive(rule, ZonedDateTime.now(zone))
+
+    private fun debtConfig(rule: Rule) = DebtReducer.Config(
+        maxBurstSeconds = rule.maxBurstSeconds ?: Rule.DEFAULT_MAX_BURST_SECONDS,
+        debtRatio = rule.debtRatio ?: Rule.DEFAULT_DEBT_RATIO,
+    )
 
     private suspend fun evaluateAndAct(packageName: String?, rules: List<Rule>, debt: DebtState) {
         if (packageName == null) {
@@ -133,7 +197,6 @@ class BlockingCoordinator @Inject constructor(
             overlayController.show {
                 BlockScreenContent(
                     verdict = verdict,
-                    packageName = packageName,
                     frictionPhrase = phrase,
                     onUnblock = { method -> unblock(packageName, verdict, method) },
                 )
