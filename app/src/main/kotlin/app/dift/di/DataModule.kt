@@ -6,9 +6,10 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.Room
 import app.dift.data.db.DiftDatabase
+import app.dift.data.db.MIGRATION_1_2
+import app.dift.data.db.dao.BlockDao
 import app.dift.data.db.dao.BlockEventDao
 import app.dift.data.db.dao.GrantDao
-import app.dift.data.db.dao.RuleDao
 import app.dift.data.db.dao.UsageDao
 import dagger.Module
 import dagger.Provides
@@ -26,13 +27,15 @@ object DataModule {
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): DiftDatabase =
-        Room.databaseBuilder(context, DiftDatabase::class.java, "dift.db").build()
+        Room.databaseBuilder(context, DiftDatabase::class.java, "dift.db")
+            .addMigrations(MIGRATION_1_2)
+            .build()
 
     @Provides
     fun provideUsageDao(db: DiftDatabase): UsageDao = db.usageDao()
 
     @Provides
-    fun provideRuleDao(db: DiftDatabase): RuleDao = db.ruleDao()
+    fun provideBlockDao(db: DiftDatabase): BlockDao = db.blockDao()
 
     @Provides
     fun provideGrantDao(db: DiftDatabase): GrantDao = db.grantDao()

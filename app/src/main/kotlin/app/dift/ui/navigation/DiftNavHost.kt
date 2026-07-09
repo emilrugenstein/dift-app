@@ -2,8 +2,7 @@ package app.dift.ui.navigation
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -20,20 +19,18 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import app.dift.R
-import app.dift.ui.screens.apps.AppsScreen
-import app.dift.ui.screens.dashboard.DashboardScreen
-import app.dift.ui.screens.history.HistoryScreen
-import app.dift.ui.screens.onboarding.OnboardingScreen
-import app.dift.ui.screens.ruleeditor.RuleEditorScreen
-import app.dift.ui.screens.rules.RulesScreen
-import app.dift.ui.screens.settings.SettingsScreen
-import androidx.navigation.NavType
 import androidx.navigation.navArgument
+import app.dift.R
+import app.dift.ui.screens.blockeditor.BlockEditorScreen
+import app.dift.ui.screens.blocks.BlocksScreen
+import app.dift.ui.screens.onboarding.OnboardingScreen
+import app.dift.ui.screens.overview.OverviewScreen
+import app.dift.ui.screens.settings.SettingsScreen
 
 private data class NavDestination(
     val route: String,
@@ -42,9 +39,8 @@ private data class NavDestination(
 )
 
 private val destinations = listOf(
-    NavDestination(Routes.DASHBOARD, R.string.nav_dashboard, Icons.Filled.Home),
-    NavDestination(Routes.APPS, R.string.nav_apps, Icons.AutoMirrored.Filled.List),
-    NavDestination(Routes.RULES, R.string.nav_rules, Icons.Filled.Lock),
+    NavDestination(Routes.OVERVIEW, R.string.nav_overview, Icons.Filled.DateRange),
+    NavDestination(Routes.BLOCKS, R.string.nav_blocks, Icons.Filled.Lock),
     NavDestination(Routes.SETTINGS, R.string.nav_settings, Icons.Filled.Settings),
 )
 
@@ -94,30 +90,27 @@ private fun MainScaffold() {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = Routes.DASHBOARD,
+            startDestination = Routes.OVERVIEW,
             modifier = Modifier.padding(innerPadding),
         ) {
-            composable(Routes.DASHBOARD) { DashboardScreen() }
-            composable(Routes.APPS) { AppsScreen() }
-            composable(Routes.RULES) {
-                RulesScreen(
-                    onOpenHistory = { navController.navigate(Routes.HISTORY) },
-                    onAddRule = { navController.navigate(Routes.ruleEditor()) },
-                    onEditRule = { ruleId -> navController.navigate(Routes.ruleEditor(ruleId)) },
+            composable(Routes.OVERVIEW) { OverviewScreen() }
+            composable(Routes.BLOCKS) {
+                BlocksScreen(
+                    onAddBlock = { navController.navigate(Routes.blockEditor()) },
+                    onEditBlock = { blockId -> navController.navigate(Routes.blockEditor(blockId)) },
                 )
             }
-            composable(Routes.HISTORY) { HistoryScreen() }
             composable(
-                route = Routes.RULE_EDITOR_ROUTE,
+                route = Routes.BLOCK_EDITOR_ROUTE,
                 arguments = listOf(
-                    navArgument(Routes.RULE_EDITOR_ARG) {
+                    navArgument(Routes.BLOCK_EDITOR_ARG) {
                         type = NavType.LongType
                         defaultValue = 0L
                     },
                 ),
             ) { entry ->
-                val ruleId = entry.arguments?.getLong(Routes.RULE_EDITOR_ARG) ?: 0L
-                RuleEditorScreen(ruleId = ruleId, onSaved = { navController.popBackStack() })
+                val blockId = entry.arguments?.getLong(Routes.BLOCK_EDITOR_ARG) ?: 0L
+                BlockEditorScreen(blockId = blockId, onSaved = { navController.popBackStack() })
             }
             composable(Routes.SETTINGS) { SettingsScreen() }
         }

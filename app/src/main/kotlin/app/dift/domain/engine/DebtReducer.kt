@@ -4,70 +4,77 @@ import app.dift.domain.model.DebtEvent
 import app.dift.domain.model.DebtState
 
 /**
- * Pure state machine for the night usage-debt mechanic (docs/features/usage-debt.md, ADR-0004).
+ * Pure state machine for usage-debt (docs/features/usage-debt.md, ADR-0004).
  *
- * Model: at most one of {burst, debt} is active at a time. While debt is active
- * (`debtUntilMs` in the future) no burst accrues — overlay time is free. A burst converts to
- * debt only by hitting the cap (a Tick) or by locking/screen-off (a Lock). Leaving the window
- * merely cancels the burst (no debt); an already-running debt keeps counting down.
+ * A burst accumulates while a tick is `using`; pausing (`using = false`, still in-window) banks the
+ * segment without resetting it, so "continuous" survives a glance at an exempt app. Leaving the
+ * window cancels the burst with no debt. Reaching the cap — or a [DebtEvent.Lock] mid-burst —
+ * converts the elapsed time 1:1 into a cooldown: an absolute deadline that counts down regardless
+ * of screen/lock state. While serving a cooldown no burst accrues (overlay time is free).
  */
 object DebtReducer {
 
-    data class Config(
-        val maxBurstSeconds: Int,
-        val debtRatio: Float,
-    )
+    data class Config(val maxBurstSeconds: Int)
 
     fun reduce(state: DebtState, event: DebtEvent, nowMs: Long, config: Config): DebtState {
+        // A finished cooldown clears first, so both branches see a clean base (and the coordinator
+        // can detect DEBT_SERVED by the cooldown going null).
+        val base = if (state.cooldownUntilMs != null && nowMs >= state.cooldownUntilMs) {
+            state.copy(cooldownStartedAtMs = null, cooldownUntilMs = null)
+        } else {
+            state
+        }
         val maxBurstMs = config.maxBurstSeconds * MILLIS_PER_SECOND
         return when (event) {
-            is DebtEvent.Unlock -> onUnlock(state, event, nowMs)
-            DebtEvent.Lock -> onLock(state, nowMs, maxBurstMs, config.debtRatio)
-            is DebtEvent.Tick -> onTick(state, event, nowMs, maxBurstMs, config.debtRatio)
+            DebtEvent.Lock -> onLock(base, nowMs, maxBurstMs)
+            is DebtEvent.Tick -> onTick(base, event.inWindow, event.using, nowMs, maxBurstMs)
         }
     }
 
-    private fun onUnlock(state: DebtState, event: DebtEvent.Unlock, nowMs: Long): DebtState =
-        when {
-            state.debtActiveAt(nowMs) -> state // serving debt: overlay shows, no burst
-            event.inWindow && state.burstStartedAtMs == null -> state.copy(burstStartedAtMs = nowMs)
-            else -> state
-        }
-
-    private fun onLock(state: DebtState, nowMs: Long, maxBurstMs: Long, ratio: Float): DebtState {
-        if (state.debtActiveAt(nowMs)) return state.copy(burstStartedAtMs = null)
-        val start = state.burstStartedAtMs ?: return state
-        val elapsed = (nowMs - start).coerceIn(0, maxBurstMs)
-        val debtMs = (elapsed * ratio).toLong()
-        return DebtState(
-            burstStartedAtMs = null,
-            debtUntilMs = if (debtMs > 0) nowMs + debtMs else null,
-        )
+    private fun onLock(state: DebtState, nowMs: Long, maxBurstMs: Long): DebtState {
+        if (state.inCooldown(nowMs)) return state.resetBurst()
+        val elapsed = state.liveElapsedMs(nowMs)
+        return if (elapsed <= 0) DebtState.IDLE else cooldown(nowMs, elapsed, maxBurstMs)
     }
 
     private fun onTick(
         state: DebtState,
-        event: DebtEvent.Tick,
+        inWindow: Boolean,
+        using: Boolean,
         nowMs: Long,
         maxBurstMs: Long,
-        ratio: Float,
     ): DebtState {
-        // 1) Serving debt: keep going until it expires, then clear it (DEBT_SERVED).
-        if (state.debtUntilMs != null) {
-            return if (nowMs >= state.debtUntilMs) state.copy(debtUntilMs = null) else state
+        if (state.inCooldown(nowMs)) return state.resetBurst()
+        // Window over: cancel any burst without creating debt (the night is done).
+        if (!inWindow) return state.resetBurst()
+        if (!using) {
+            // Pause: bank the running segment, keep the accumulator.
+            return if (state.burstStartedAtMs != null) {
+                state.copy(
+                    burstElapsedMs = state.liveElapsedMs(nowMs),
+                    burstStartedAtMs = null,
+                )
+            } else {
+                state
+            }
         }
-        // 2) Not eligible to accrue (out of window, locked, or overlay up): cancel any burst.
-        if (!event.inWindow || !event.unlocked || event.overlayShowing) {
-            return if (state.burstStartedAtMs != null) state.copy(burstStartedAtMs = null) else state
-        }
-        // 3) Eligible: start a burst, or fire the cap once it is reached.
-        val start = state.burstStartedAtMs ?: return state.copy(burstStartedAtMs = nowMs)
-        return if (nowMs - start >= maxBurstMs) {
-            DebtState(burstStartedAtMs = null, debtUntilMs = nowMs + (maxBurstMs * ratio).toLong())
+        val started = state.burstStartedAtMs ?: nowMs
+        val elapsed = state.burstElapsedMs + (nowMs - started)
+        return if (elapsed >= maxBurstMs) {
+            cooldown(nowMs, elapsed, maxBurstMs)
         } else {
-            state
+            state.copy(burstStartedAtMs = started)
         }
     }
+
+    private fun cooldown(nowMs: Long, elapsedMs: Long, maxBurstMs: Long) = DebtState(
+        cooldownStartedAtMs = nowMs,
+        cooldownUntilMs = nowMs + elapsedMs.coerceAtMost(maxBurstMs),
+    )
+
+    private fun DebtState.resetBurst(): DebtState =
+        if (burstElapsedMs == 0L && burstStartedAtMs == null) this
+        else copy(burstElapsedMs = 0, burstStartedAtMs = null)
 
     private const val MILLIS_PER_SECOND = 1000L
 }

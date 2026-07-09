@@ -52,29 +52,22 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[RETENTION_DAYS] = value }
     }
 
-    val defaultFrictionPhrase: Flow<String> =
-        dataStore.data.map { it[FRICTION_PHRASE] ?: DEFAULT_FRICTION_PHRASE }
-
-    suspend fun setDefaultFrictionPhrase(value: String) {
-        dataStore.edit { it[FRICTION_PHRASE] = value }
-    }
-
     val forcePollingMode: Flow<Boolean> = dataStore.data.map { it[FORCE_POLLING] ?: false }
 
     suspend fun setForcePollingMode(value: Boolean) {
         dataStore.edit { it[FORCE_POLLING] = value }
     }
 
-    // --- Night usage-debt state (must survive process death and reboot) ---
+    // --- Usage-debt cooldown (the only debt state that must survive process death and reboot) ---
 
-    val activeBurstStartedAt: Flow<Long?> = dataStore.data.map { it[BURST_STARTED_AT] }
+    val cooldownStartedAt: Flow<Long?> = dataStore.data.map { it[COOLDOWN_STARTED_AT] }
 
-    val debtUntil: Flow<Long?> = dataStore.data.map { it[DEBT_UNTIL] }
+    val cooldownUntil: Flow<Long?> = dataStore.data.map { it[COOLDOWN_UNTIL] }
 
-    suspend fun setDebtState(burstStartedAt: Long?, debtUntil: Long?) {
+    suspend fun setCooldown(startedAt: Long?, until: Long?) {
         dataStore.edit {
-            if (burstStartedAt == null) it.remove(BURST_STARTED_AT) else it[BURST_STARTED_AT] = burstStartedAt
-            if (debtUntil == null) it.remove(DEBT_UNTIL) else it[DEBT_UNTIL] = debtUntil
+            if (startedAt == null) it.remove(COOLDOWN_STARTED_AT) else it[COOLDOWN_STARTED_AT] = startedAt
+            if (until == null) it.remove(COOLDOWN_UNTIL) else it[COOLDOWN_UNTIL] = until
         }
     }
 
@@ -83,13 +76,11 @@ class SettingsRepository @Inject constructor(
         val LAST_INGESTED_EVENT_TIME = longPreferencesKey("last_ingested_event_time")
         val OPEN_SESSIONS = stringPreferencesKey("open_sessions")
         val RETENTION_DAYS = intPreferencesKey("retention_days")
-        val FRICTION_PHRASE = stringPreferencesKey("default_friction_phrase")
         val FORCE_POLLING = booleanPreferencesKey("force_polling_mode")
-        val BURST_STARTED_AT = longPreferencesKey("debt_burst_started_at")
-        val DEBT_UNTIL = longPreferencesKey("debt_until")
+        val COOLDOWN_STARTED_AT = longPreferencesKey("debt_cooldown_started_at")
+        val COOLDOWN_UNTIL = longPreferencesKey("debt_cooldown_until")
 
         const val DEFAULT_RETENTION_DAYS = 365
-        const val DEFAULT_FRICTION_PHRASE = "I choose to waste this time"
 
         // "pkg|start,pkg|start" — package names never contain '|' or ','.
         fun encodeOpenSessions(sessions: List<OpenSession>): String =

@@ -9,11 +9,13 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Owns the one full-screen blocking overlay window (ADR-0003 — never an Activity). Idempotent and
- * main-thread-safe: the coordinator calls [show]/[hide] from a background coroutine.
+ * Owns the small top-right status indicator window (docs/features/usage-debt.md). Separate from
+ * the full-screen [OverlayController] because it is click-through and stays up while a block
+ * window is active or a cooldown is draining. Its content is set once and re-renders itself from
+ * the coordinator's [app.dift.system.overlay.IndicatorState] flow.
  */
 @Singleton
-class OverlayController @Inject constructor(
+class IndicatorOverlayController @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -24,16 +26,17 @@ class OverlayController @Inject constructor(
         private set
 
     fun show(content: @Composable () -> Unit) {
+        if (isShowing) return
         isShowing = true
         runOnMain {
-            val activeHost = host ?: OverlayComposeHost(context, OverlayComposeHost.blockParams())
-                .also { host = it }
-            if (activeHost.isShowing) activeHost.hide()
+            val activeHost = host
+                ?: OverlayComposeHost(context, OverlayComposeHost.indicatorParams()).also { host = it }
             activeHost.show(content)
         }
     }
 
     fun hide() {
+        if (!isShowing) return
         isShowing = false
         runOnMain { host?.hide() }
     }

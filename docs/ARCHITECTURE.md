@@ -4,60 +4,72 @@ Single Gradle module (`:app`), strict package layering. Kotlin + Jetpack Compose
 Hilt, Room + DataStore, WorkManager. minSdk = targetSdk-ish single-device app (Fairphone 6,
 Android 15/16) — no backward-compat code.
 
+Dift has two features: **usage-debt blocking** (the only blocking mechanism —
+docs/features/usage-debt.md) and a **night-aligned usage overview** (docs/features/usage-overview.md).
+
 ## Layers
 
 | Package   | Contents | Rules |
 |-----------|----------|-------|
-| `domain/` | `RuleEngine`, `DebtReducer`, `SessionDeriver`, models, `SafetyDenylist` | **Pure Kotlin.** No `android.*`/`androidx.*` imports, no wall-clock reads (time is a parameter). Enforced by `DomainPurityTest` (Konsist). |
+| `domain/` | `BlockEngine`, `DebtReducer`, `NightTimeline`, `SessionDeriver`, models, `SafetyDenylist` | **Pure Kotlin.** No `android.*`/`androidx.*` imports, no wall-clock reads (time is a parameter). Enforced by `DomainPurityTest` (Konsist). |
 | `data/`   | Room database (entities, DAOs), DataStore settings, repositories | Repositories are the only DB/DataStore consumers; expose Flows + suspend functions. |
-| `system/` | Accessibility service, fallback monitor FGS, `ForegroundAppTracker`, `DeviceStateMonitor`, `BlockingCoordinator`, `OverlayComposeHost`/`OverlayController`, `UsageStatsIngester`, WorkManager workers, `BootReceiver`, `PermissionsChecker` | Android machinery. Services stay thin — business logic lives in `domain/`, orchestration in `BlockingCoordinator`. |
-| `ui/`     | Compose screens (one folder per screen: `XScreen.kt` + `XViewModel.kt`), theme, navigation, overlay content (`BlockScreen`) | ViewModels talk to repositories/coordinator only. All text via `strings.xml`. |
+| `system/` | Accessibility service, fallback monitor FGS, `ForegroundAppTracker`, `DeviceStateMonitor`, `BlockingCoordinator`, `OverlayComposeHost` + `OverlayController`/`IndicatorOverlayController`, `UsageStatsIngester`, workers, `BootReceiver`, `PermissionsChecker` | Android machinery. Services stay thin — logic in `domain/`, orchestration in `BlockingCoordinator`. |
+| `ui/`     | Compose screens (one folder per screen: `XScreen.kt` + `XViewModel.kt`), theme, navigation, overlay content (`BlockScreenContent`, `IndicatorContent`) | ViewModels talk to repositories/coordinator only. All text via `strings.xml`. |
 | `di/`     | Hilt modules | — |
 
 ## Runtime flow (blocking pipeline)
 
 ```
-DiftAccessibilityService ─┐                        ┌→ OverlayController → BlockScreen
-  (TYPE_WINDOW_STATE_     ├→ ForegroundAppTracker ─┤    (Compose in a WindowManager window)
-   CHANGED events)        │    StateFlow<String?>  └→ home-kick via performGlobalAction
-FallbackMonitorService  ──┘                             (only while accessibility is bound)
+DiftAccessibilityService ─┐                        ┌→ OverlayController → BlockScreenContent
+  (TYPE_WINDOW_STATE_     ├→ ForegroundAppTracker ─┤    (full-screen lockout, touch-consuming)
+   CHANGED events)        │    StateFlow<String?>  └→ IndicatorOverlayController → IndicatorContent
+FallbackMonitorService  ──┘                             (small top-right, click-through)
   (1 s queryEvents poll,           │
    screen-on only)                 ▼
-DeviceStateMonitor ────→  BlockingCoordinator ──→ RuleEngine.evaluate(input)   [pure]
-  (unlock/lock/screen)       ▲     ▲    ▲                  │
-                     RuleRepo┘ UsageRepo└GrantRepo         └→ BlockEventRepository (audit)
+DeviceStateMonitor ────→  BlockingCoordinator ──→ BlockEngine.activeBlock(now)   [pure]
+  (unlock/lock/screen)       ▲                          DebtReducer.reduce(state, event)  [pure]
+                     BlockRepo┘                          └→ BlockEventRepository (audit)
 ```
 
 - **Detection** is an interface (`ForegroundAppDetector`) with two implementations:
   accessibility (primary, instant) and usage-events polling (fallback when accessibility is
   disabled). Both feed the same tracker.
 - **`ForegroundAppTracker`** filters window events: ignores SystemUI, the current IME, and
-  Dift's own overlay window (otherwise showing the overlay re-enters the pipeline — infinite
-  loop); accepts only classes that resolve to real Activities (cached PackageManager lookups);
-  exposes a debounced `StateFlow<String?>`.
-- **`BlockingCoordinator`** (singleton) is the only orchestrator: assembles `EvaluationInput`
-  from hot in-memory rule/grant caches (no DB on the hot path), calls the pure `RuleEngine`,
-  acts on the verdict (overlay show/hide, home-kick, block-event logging). Runs a 1 s ticker
-  while a limit rule or usage-debt window is active so blocks fire mid-session. Hides the
-  overlay whenever the foreground app is on the `SafetyDenylist` (dialer stays reachable).
-- **Blocking UI** is drawn by `OverlayComposeHost` (TYPE_APPLICATION_OVERLAY via
-  WindowManager). Never via an Activity — ADR-0003.
+  Dift's own overlay windows (otherwise showing an overlay re-enters the pipeline — infinite
+  loop); accepts only classes that resolve to real Activities; exposes a debounced
+  `StateFlow<String?>`.
+- **`BlockingCoordinator`** (singleton) is the only orchestrator. Each second (and on every
+  foreground/block/device change) it asks `BlockEngine` which block window is in force (strictest
+  wins), feeds a `DebtEvent` to the pure `DebtReducer`, and acts on the result:
+  - the burst accumulator fills toward the active block's `maxBurstSeconds`;
+  - hitting the cap (or a lock mid-burst) banks an equal **cooldown** (an absolute deadline,
+    persisted so it survives reboot);
+  - while a cooldown is live and the foreground app is *blockable* (not exempt, not on the
+    `SafetyDenylist`), the full-screen lockout shows; the corner indicator shows the fill
+    (counting) or drain (blocked) fraction the whole time a window/cooldown is active.
+  There is **no home-kick and no Activity** (ADR-0003): pressing home is always allowed because
+  the launcher is on the `SafetyDenylist`, and any app launch re-raises the lockout.
+- **Blocking UI** is drawn by `OverlayComposeHost` (TYPE_APPLICATION_OVERLAY via WindowManager) —
+  two windows, full-screen (touch-consuming, non-focusable) and indicator (click-through).
 - **Usage tracking**: `UsageStatsIngester` reads `UsageEvents` since a DataStore checkpoint,
-  derives sessions via pure `SessionDeriver` (sessions pre-split at local midnight), upserts
-  Room tables in one transaction. Runs every 15 min (WorkManager), on dashboard open, and
-  feeds live "used today" to the coordinator. Nightly `RollupWorker` finalizes and prunes.
+  derives sessions via pure `SessionDeriver` (pre-split at local midnight), upserts Room in one
+  transaction. Runs every 15 min (WorkManager) and on overview open. Nightly `RollupWorker`
+  finalizes and prunes. The overview reads sessions back through the pure `NightTimeline`.
 
 ## Threading model
 
-- Services/receivers callbacks arrive on the main thread; hand work to coroutines immediately.
-- `BlockingCoordinator` runs on a single dedicated dispatcher; overlay show/hide always hops
-  to `Dispatchers.Main`.
+- Service/receiver callbacks arrive on the main thread; hand work to coroutines immediately.
+- `BlockingCoordinator` runs on its own `SupervisorJob` scope; overlay show/hide always hops to
+  `Dispatchers.Main` (inside the overlay controllers).
 - Room/DataStore access via `Dispatchers.IO` (repositories are `suspend`/Flow-based).
 
 ## State & persistence
 
-- **Room**: rules, rule↔app cross-refs, unblock grants, usage sessions, daily aggregates,
-  block events. Schema JSONs committed under `app/schemas/`.
-- **DataStore**: scalar settings + ingest checkpoint + persisted night-debt state
-  (`activeBurstStartedAt`, `debtUntil` — must survive process death and reboot).
+- **Room** (`dift.db`, v2): blocks (`block_rules`), block↔exempt-app cross-refs (`rule_apps`),
+  usage sessions, daily aggregates, block events. `unblock_grants` survives from v1 for schema
+  stability but is unused. `MIGRATION_1_2` deletes retired rows without touching structure — see
+  docs/DATA_MODEL.md and `Migrations.kt`.
+- **DataStore**: scalar settings + ingest checkpoint + the persisted cooldown
+  (`cooldownStartedAt`, `cooldownUntil` — must survive process death and reboot). The burst is
+  in-memory only.
 - Split rationale: docs/DATA_MODEL.md.

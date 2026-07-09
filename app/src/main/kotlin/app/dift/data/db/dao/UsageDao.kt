@@ -35,6 +35,17 @@ interface UsageDao {
     @Query("SELECT totalMs FROM daily_usage WHERE dayLocal = :dayLocal AND packageName = :packageName")
     suspend fun totalFor(dayLocal: String, packageName: String): Long?
 
+    /** Closed sessions overlapping [fromMs, toMs) — feeds the night-aligned overview chart. */
+    @Query(
+        "SELECT * FROM usage_sessions WHERE endEpochMs > :fromMs AND startEpochMs < :toMs " +
+            "ORDER BY startEpochMs",
+    )
+    suspend fun sessionsInRange(fromMs: Long, toMs: Long): List<UsageSessionEntity>
+
+    /** Earliest recorded day ("2026-07-05"), or null when there is no usage yet. Bounds the pager. */
+    @Query("SELECT MIN(dayLocal) FROM usage_sessions")
+    suspend fun earliestSessionDay(): String?
+
     @Query("DELETE FROM usage_sessions WHERE dayLocal < :cutoffDayLocal")
     suspend fun pruneSessionsBefore(cutoffDayLocal: String)
 

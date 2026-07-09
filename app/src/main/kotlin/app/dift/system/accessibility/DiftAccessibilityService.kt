@@ -9,9 +9,12 @@ import javax.inject.Inject
 
 /**
  * Primary foreground-app detector (ADR-0002). Deliberately thin: it forwards window-state
- * events to the tracker and lends its home-kick capability to the coordinator. No business
- * logic here (agent-safety: services stay dumb). Config keeps
- * canRetrieveWindowContent="false" (CLAUDE.md invariant #8).
+ * events to the tracker and starts the coordinator. No business logic here (agent-safety:
+ * services stay dumb). Config keeps canRetrieveWindowContent="false" (CLAUDE.md invariant #8).
+ *
+ * Usage-debt blocks enforce purely through the overlay (no home-kick): pressing home is always
+ * allowed because the launcher is on the SafetyDenylist, so the corner indicator shows the
+ * remaining cooldown while any app launch re-raises the full-screen lockout.
  */
 @AndroidEntryPoint
 class DiftAccessibilityService : AccessibilityService() {
@@ -22,7 +25,6 @@ class DiftAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        coordinator.homeKick = { performGlobalAction(GLOBAL_ACTION_HOME) }
         coordinator.start()
     }
 
@@ -35,9 +37,4 @@ class DiftAccessibilityService : AccessibilityService() {
     }
 
     override fun onInterrupt() = Unit
-
-    override fun onUnbind(intent: android.content.Intent?): Boolean {
-        coordinator.homeKick = null
-        return super.onUnbind(intent)
-    }
 }

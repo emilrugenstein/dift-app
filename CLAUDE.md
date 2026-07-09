@@ -21,8 +21,8 @@ Releases: push a tag `vX.Y.Z` → signed APK on a GitHub Release (docs/RELEASING
 
 ```
 app/src/main/kotlin/app/dift/
-  domain/   PURE KOTLIN (no android.*/androidx.*). RuleEngine, DebtReducer, SessionDeriver,
-            models, SafetyDenylist. Enforced by app/src/test/.../arch/DomainPurityTest.kt.
+  domain/   PURE KOTLIN (no android.*/androidx.*). BlockEngine, DebtReducer, NightTimeline,
+            SessionDeriver, models, SafetyDenylist. Enforced by .../arch/DomainPurityTest.kt.
   data/     Room entities/DAOs, DataStore settings, repositories.
   system/   Android machinery: accessibility service, fallback monitor, overlay host,
             blocking coordinator, usage ingester, workers, receivers, permission checks.
@@ -30,9 +30,14 @@ app/src/main/kotlin/app/dift/
   di/       Hilt modules.
 ```
 
+Dift does two things: (1) **usage-debt blocking** — the only blocking mechanism; time-windowed
+"blocks" ration continuous use and repay it with equal lockouts (docs/features/usage-debt.md),
+and (2) a **night-aligned usage overview** that infers sleep (docs/features/usage-overview.md).
+
 Runtime flow: detection (accessibility service, or polling fallback) → `ForegroundAppTracker`
-→ `BlockingCoordinator` → pure `RuleEngine` verdict → `OverlayComposeHost` overlay and/or
-home-kick. Details + diagram: docs/ARCHITECTURE.md.
+→ `BlockingCoordinator`, which runs the pure `BlockEngine` (which block is in force) + `DebtReducer`
+(burst/cooldown machine) and drives two overlays via `OverlayComposeHost`: the full-screen lockout
+and the small corner indicator. No home-kick, no Activity. Details + diagram: docs/ARCHITECTURE.md.
 
 ## Invariants — violating any of these is a bug, not a refactor
 
