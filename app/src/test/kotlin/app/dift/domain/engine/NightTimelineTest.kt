@@ -39,7 +39,7 @@ class NightTimelineTest {
     }
 
     @Test
-    fun `sleep is the gap straddling midnight, not the daytime idle gap`() {
+    fun `sleep is the gap containing the 4-30 anchor, not the daytime idle gap`() {
         val night = firstNight(
             listOf(
                 interval("2026-07-05T22:00:00", "2026-07-05T22:30:00"), // evening
@@ -53,6 +53,20 @@ class NightTimelineTest {
     }
 
     @Test
+    fun `use past midnight only delays the sleep start`() {
+        val night = firstNight(
+            listOf(
+                interval("2026-07-06T00:30:00", "2026-07-06T01:00:00"), // late night scrolling
+                interval("2026-07-06T08:00:00", "2026-07-06T08:10:00"), // morning
+            ),
+        )
+        // Sleep runs from 01:00 (minute 780) to 08:00 (minute 1200) — anchored at 04:30.
+        val sleep = requireNotNull(night.sleep)
+        assertEquals(780, sleep.startMinute)
+        assertEquals(1200, sleep.endMinute)
+    }
+
+    @Test
     fun `an unused night is a full-height sleep span`() {
         val sleep = requireNotNull(firstNight(emptyList()).sleep)
         assertEquals(0, sleep.startMinute)
@@ -60,8 +74,8 @@ class NightTimelineTest {
     }
 
     @Test
-    fun `phone used across midnight yields no clear sleep`() {
-        val night = firstNight(listOf(interval("2026-07-05T23:50:00", "2026-07-06T00:10:00")))
+    fun `phone used across 4-30 yields no clear sleep`() {
+        val night = firstNight(listOf(interval("2026-07-06T04:20:00", "2026-07-06T04:40:00")))
         assertNull(night.sleep)
     }
 

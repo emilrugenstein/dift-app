@@ -10,17 +10,23 @@ side, so the dark gap in the middle of each column *is* the night's sleep.
 
 - **Y axis = time of day, midnight in the centre.** Each column spans **noon → noon**
   (`[eveningDate 12:00, morningDate 12:00)`), so local midnight sits exactly halfway down
-  (minute 720 of 1440).
+  (minute 720 of 1440) — marked by a dashed line.
 - **X axis = the seven nights of the week**, left → right, starting with **Sunday → Monday**
-  (the night whose morning is the ISO week's Monday) and ending Saturday → Sunday. Column *i*
-  covers the night *before* weekday *i*; labels are the two-letter morning day.
-- **Usage spans** (solid) — every stretch the phone was actively used, drawn at its time in the
-  column. Per-app sessions are merged into device-usage intervals first (gaps ≤ 60 s are treated
-  as continuous), so app-switching doesn't fragment the picture.
-- **Sleep span** (translucent, behind the usage spans) — the **longest no-use gap** inside the
-  column. This is the inferred sleep interval "from the last phone usage to the first". It works
-  because the alarm app wakes the screen every morning, marking the first-use edge. Capped at the
-  full 24 h column (nights with no usage show a full-height sleep span).
+  (the night whose morning is the ISO week's Monday) and ending Saturday → Sunday. Each column
+  is labeled with **both days**: the evening day above (dimmed) and the morning day below, so a
+  column reads "Su ↓ Mo".
+- **Usage spans** (solid, accent color) — every stretch the phone was actively used, drawn at
+  its time in the column. Per-app sessions are merged into device-usage intervals first (gaps
+  ≤ 60 s are treated as continuous), so app-switching doesn't fragment the picture.
+- **Sleep span** (translucent teal, behind the usage spans) — the no-use gap **containing
+  04:30** (`SLEEP_ANCHOR_MINUTE`). The anchor is 04:30, not midnight: scrolling past 00:00 must
+  only *delay* the sleep start, not erase the night, and nobody is deliberately on the phone at
+  04:30. The gap runs from the last use before the anchor to the first use after (the morning
+  alarm marks that edge); a night with use *across* 04:30 has no clear sleep. Capped at the full
+  24 h column (nights with no usage show a full-height sleep span).
+- **Tap a sleep span** to select it: the span brightens and a detail block appears below the
+  chart with the night ("Su → Mo"), the start–end times, and the duration in large type.
+  Tapping it again (or tapping empty space) dismisses.
 
 `NightTimeline.buildWeek(...)` is pure: it takes merged device-usage intervals + the week's
 Monday + zone and returns seven `NightColumn`s (usage spans + sleep span, all in
