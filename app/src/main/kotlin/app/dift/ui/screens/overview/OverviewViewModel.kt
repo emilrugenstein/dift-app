@@ -109,7 +109,7 @@ class OverviewViewModel @Inject constructor(
         // In-progress sessions drawn up to "now" (buildWeek clips them to the columns).
         val nowMs = System.currentTimeMillis()
         val live = settings.openSessions.first().map { UsageInterval(it.startMs, nowMs) }
-        return NightTimeline.buildWeek(closed + live, weekMonday, zone)
+        return NightTimeline.buildWeek(closed + live, weekMonday, zone, nowMs)
     }
 
     private suspend fun buildTotals(): List<DayBar> {

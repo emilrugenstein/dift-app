@@ -34,20 +34,28 @@ object NightTimeline {
      * @param intervals raw per-app session intervals (any order); merged internally.
      * @param weekMonday the ISO week's Monday. Column 0 is the night whose morning is this Monday
      *   (Sunday → Monday); column 6 is Saturday → Sunday.
+     * @param nowMs the current instant. A night whose 04:30 anchor is still in the future has no
+     *   sleep gap yet — the night has not happened, so nothing is highlighted.
      */
     fun buildWeek(
         intervals: List<UsageInterval>,
         weekMonday: LocalDate,
         zone: ZoneId,
+        nowMs: Long,
     ): List<NightColumn> {
         val merged = merge(intervals)
         return (0 until DAYS_PER_WEEK).map { i ->
             val morning = weekMonday.plusDays(i.toLong())
-            buildColumn(merged, morning, zone)
+            buildColumn(merged, morning, zone, nowMs)
         }
     }
 
-    private fun buildColumn(merged: List<UsageInterval>, morning: LocalDate, zone: ZoneId): NightColumn {
+    private fun buildColumn(
+        merged: List<UsageInterval>,
+        morning: LocalDate,
+        zone: ZoneId,
+        nowMs: Long,
+    ): NightColumn {
         val startMs = morning.minusDays(1).atTime(NOON_HOUR, 0).atZone(zone).toInstant().toEpochMilli()
         val endMs = morning.atTime(NOON_HOUR, 0).atZone(zone).toInstant().toEpochMilli()
         val total = (endMs - startMs).toDouble()
@@ -60,7 +68,10 @@ object NightTimeline {
             .map { Span(toMinute(it.startMs), toMinute(it.endMs)) }
             .filter { it.endMinute > it.startMinute }
 
-        return NightColumn(morningDate = morning, usage = spans, sleep = sleepGap(spans))
+        val anchorMs = morning.atTime(ANCHOR_HOUR, ANCHOR_MINUTE_OF_HOUR)
+            .atZone(zone).toInstant().toEpochMilli()
+        val sleep = if (anchorMs > nowMs) null else sleepGap(spans)
+        return NightColumn(morningDate = morning, usage = spans, sleep = sleep)
     }
 
     /**
@@ -105,6 +116,8 @@ object NightTimeline {
     /** 04:30 local, as minutes from the column top (noon): 12 h + 4 h 30 m. */
     const val SLEEP_ANCHOR_MINUTE = 16 * 60 + 30
 
+    private const val ANCHOR_HOUR = 4
+    private const val ANCHOR_MINUTE_OF_HOUR = 30
     private const val NOON_HOUR = 12
     private const val DAYS_PER_WEEK = 7
     private const val MERGE_GAP_MS = 60_000L
