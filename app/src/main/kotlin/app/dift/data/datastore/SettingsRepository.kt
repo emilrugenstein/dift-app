@@ -82,15 +82,23 @@ class SettingsRepository @Inject constructor(
 
         const val DEFAULT_RETENTION_DAYS = 365
 
-        // "pkg|start,pkg|start" — package names never contain '|' or ','.
+        // "pkg|start|cls1;cls2" entries joined by ',' — package and activity-class names never
+        // contain '|', ',' or ';'. The class list is the deriver's resumed-activity set; entries
+        // written by versions before it existed have two fields and decode to an empty set (the
+        // deriver then falls back to close-on-any-pause for that one carried session).
         fun encodeOpenSessions(sessions: List<OpenSession>): String =
-            sessions.joinToString(",") { "${it.packageName}|${it.startMs}" }
+            sessions.joinToString(",") {
+                "${it.packageName}|${it.startMs}|${it.resumedClasses.joinToString(";")}"
+            }
 
         fun decodeOpenSessions(encoded: String): List<OpenSession> =
             encoded.split(",").filter { it.contains('|') }.mapNotNull { entry ->
-                val pkg = entry.substringBefore('|')
-                val start = entry.substringAfter('|').toLongOrNull() ?: return@mapNotNull null
-                OpenSession(pkg, start)
+                val fields = entry.split('|')
+                val start = fields.getOrNull(1)?.toLongOrNull() ?: return@mapNotNull null
+                val classes = fields.getOrNull(2)
+                    ?.split(';')?.filter { it.isNotBlank() }?.toSet()
+                    .orEmpty()
+                OpenSession(fields.first(), start, classes)
             }
     }
 }

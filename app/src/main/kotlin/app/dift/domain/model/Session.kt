@@ -13,8 +13,14 @@ data class Session(
     val durationMs: Long get() = endMs - startMs
 }
 
-/** A session that has started (RESUMED) but not yet ended; carried across ingest batches. */
+/**
+ * A session that has started (RESUMED) but not yet ended; carried across ingest batches.
+ * [resumedClasses] is the package's currently-resumed activity set (see SessionDeriver); it may
+ * be empty for sessions persisted by older versions, in which case the deriver falls back to
+ * closing on any PAUSED for the package.
+ */
 data class OpenSession(
     val packageName: String,
     val startMs: Long,
+    val resumedClasses: Set<String> = emptySet(),
 )

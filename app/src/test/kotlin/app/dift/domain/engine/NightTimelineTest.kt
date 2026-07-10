@@ -14,6 +14,9 @@ class NightTimelineTest {
     private val zone = ZoneId.of("UTC")
     private val monday = LocalDate.parse("2026-07-06") // 2026-07-07 is a Tuesday
 
+    /** "Now" well past the whole test week, so no column is in the future unless a test says so. */
+    private val weekOver = ms("2026-07-20T00:00:00")
+
     private fun ms(iso: String): Long =
         LocalDateTime.parse(iso).atZone(zone).toInstant().toEpochMilli()
 
@@ -21,14 +24,26 @@ class NightTimelineTest {
 
     /** Column 0 = the night whose morning is [monday]: Sun 2026-07-05 12:00 → Mon 2026-07-06 12:00. */
     private fun firstNight(intervals: List<UsageInterval>) =
-        NightTimeline.buildWeek(intervals, monday, zone).first()
+        NightTimeline.buildWeek(intervals, monday, zone, weekOver).first()
 
     @Test
     fun `builds seven columns labelled Monday through Sunday`() {
-        val week = NightTimeline.buildWeek(emptyList(), monday, zone)
+        val week = NightTimeline.buildWeek(emptyList(), monday, zone, weekOver)
         assertEquals(7, week.size)
         assertEquals(monday, week.first().morningDate)
         assertEquals(monday.plusDays(6), week.last().morningDate)
+    }
+
+    @Test
+    fun `a night whose 4-30 anchor is still in the future has no sleep span`() {
+        // It is Sunday evening 22:00; Monday 04:30 has not happened yet.
+        val week = NightTimeline.buildWeek(emptyList(), monday, zone, ms("2026-07-05T22:00:00"))
+        assertNull(week.first().sleep)
+        // Once 04:30 has passed, the (unused) night shows its full-height span again.
+        val later = NightTimeline.buildWeek(emptyList(), monday, zone, ms("2026-07-06T05:00:00"))
+        assertEquals(NightTimeline.MINUTES_PER_DAY, requireNotNull(later.first().sleep).endMinute)
+        // ...but Tuesday's night is still in the future.
+        assertNull(later[1].sleep)
     }
 
     @Test

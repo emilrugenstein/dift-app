@@ -10,11 +10,20 @@ import java.time.ZoneId
 /**
  * Pure derivation of per-app sessions from a batch of usage events (ADR-0005).
  *
- * - Multiple apps can be open at once (split screen): each RESUMED opens its own session.
+ * A package is "in session" while **at least one of its activities is resumed**, so open state
+ * is a per-package set of resumed activity classes. This is what makes within-app navigation
+ * safe: Android emits `PAUSED(act1) → RESUMED(act2) → STOPPED(act1)` when moving between two
+ * activities of the same app, and a package-keyed model would let that trailing STOPPED close
+ * the fresh act2 session — silently dropping all foreground time until the next event (the
+ * classic undercount vs Digital Wellbeing). With the class set, the trailing STOPPED removes a
+ * class that is no longer in the set and the session survives.
+ *
+ * - Events without a class (screen events; legacy checkpoints) fall back to close-on-any-pause.
+ * - Multiple apps can be open at once (split screen): each package has its own session.
  * - SCREEN_OFF / SHUTDOWN close every open session at that instant.
- * - Sessions still open at the end of the batch are returned as [Result.openSessions] and
- *   must be fed back as [pendingOpen] on the next ingest — this makes checkpointed,
- *   incremental ingestion deterministic and idempotent.
+ * - Sessions still open at the end of the batch are returned as [Result.openSessions] and must
+ *   be fed back as [pendingOpen] on the next ingest — this makes checkpointed, incremental
+ *   ingestion deterministic and idempotent.
  * - Closed sessions are split at local midnight so `dayLocal` is exact per day.
  */
 object SessionDeriver {
@@ -29,40 +38,71 @@ object SessionDeriver {
         pendingOpen: List<OpenSession>,
         zone: ZoneId,
     ): Result {
-        val open = LinkedHashMap<String, Long>()
-        pendingOpen.forEach { open.putIfAbsent(it.packageName, it.startMs) }
-        val sessions = mutableListOf<Session>()
-
+        val state = Derivation(pendingOpen, zone)
         for (event in events.sortedBy { it.timestampMs }) {
-            val pkg = event.packageName
             when (event.type) {
-                UsageEventType.RESUMED ->
-                    if (pkg != null) open.putIfAbsent(pkg, event.timestampMs)
-
-                UsageEventType.PAUSED -> {
-                    val start = if (pkg != null) open.remove(pkg) else null
-                    if (pkg != null && start != null) {
-                        sessions += splitAtMidnights(pkg, start, event.timestampMs, zone)
-                    }
-                }
-
-                UsageEventType.SCREEN_OFF, UsageEventType.SHUTDOWN -> {
-                    open.forEach { (openPkg, start) ->
-                        sessions += splitAtMidnights(openPkg, start, event.timestampMs, zone)
-                    }
-                    open.clear()
-                }
+                UsageEventType.RESUMED -> state.onResumed(event)
+                UsageEventType.PAUSED -> state.onPaused(event)
+                UsageEventType.SCREEN_OFF, UsageEventType.SHUTDOWN ->
+                    state.closeAll(event.timestampMs)
             }
         }
-
         return Result(
-            sessions = sessions,
-            openSessions = open.map { (pkg, start) -> OpenSession(pkg, start) },
+            sessions = state.sessions,
+            openSessions = state.open.map { (pkg, entry) ->
+                OpenSession(pkg, entry.startMs, entry.classes.toSet())
+            },
         )
     }
 
     fun dayLocalOf(timestampMs: Long, zone: ZoneId): String =
         Instant.ofEpochMilli(timestampMs).atZone(zone).toLocalDate().toString()
+
+    private class OpenPackage(val startMs: Long, val classes: MutableSet<String>)
+
+    private class Derivation(pendingOpen: List<OpenSession>, private val zone: ZoneId) {
+        val open = LinkedHashMap<String, OpenPackage>()
+        val sessions = mutableListOf<Session>()
+
+        init {
+            pendingOpen.forEach {
+                open.putIfAbsent(it.packageName, OpenPackage(it.startMs, it.resumedClasses.toMutableSet()))
+            }
+        }
+
+        fun onResumed(event: UsageEvent) {
+            val pkg = event.packageName ?: return
+            val entry = open[pkg]
+            if (entry == null) {
+                val classes = event.className?.let { mutableSetOf(it) } ?: mutableSetOf()
+                open[pkg] = OpenPackage(event.timestampMs, classes)
+            } else {
+                event.className?.let(entry.classes::add)
+            }
+        }
+
+        fun onPaused(event: UsageEvent) {
+            val pkg = event.packageName ?: return
+            val entry = open[pkg] ?: return
+            val cls = event.className
+            if (cls == null || entry.classes.isEmpty()) {
+                // Class-unknown event or a legacy carried session: close on any pause.
+                close(pkg, event.timestampMs)
+            } else {
+                entry.classes.remove(cls)
+                if (entry.classes.isEmpty()) close(pkg, event.timestampMs)
+            }
+        }
+
+        fun closeAll(endMs: Long) {
+            open.keys.toList().forEach { close(it, endMs) }
+        }
+
+        private fun close(pkg: String, endMs: Long) {
+            val entry = open.remove(pkg) ?: return
+            sessions += splitAtMidnights(pkg, entry.startMs, endMs, zone)
+        }
+    }
 
     private fun splitAtMidnights(
         packageName: String,

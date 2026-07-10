@@ -2,6 +2,7 @@ package app.dift.ui.screens.overview
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -36,6 +37,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -60,12 +62,18 @@ private const val MIN_SPAN_DP = 2f
 private const val CORNER_PX = 5f
 private const val MINUTE_MS = 60_000L
 
-// Sleep-highlight hue, validated against the indigo accent on both surfaces
-// (CVD ΔE 75, in-band lightness, ≥3:1 contrast). The wide translucent band vs. thin
-// solid usage marks is the secondary (shape) encoding.
-private val SleepTeal = Color(0xFF16A190)
-private const val SLEEP_ALPHA = 0.30f
-private const val SLEEP_ALPHA_SELECTED = 0.55f
+// Night-window hues, per mode (dark mode is its own step, not a flip). Both validated against
+// the darkened accent for CVD separation (ΔE ≥ 64) and surface contrast; the bright dark-mode
+// teal deliberately sits above the mark-lightness band — it is a background field, not a mark,
+// and the wide field vs. thin solid marks is the secondary (shape) encoding.
+private val NightTealDark = Color(0xFF2DD4BF)
+private val NightTealLight = Color(0xFF0D9488)
+private const val NIGHT_ALPHA = 0.55f
+private const val NIGHT_ALPHA_SELECTED = 0.85f
+
+// Usage marks: the app accent, nudged darker so the marks read as "spent" against the bright
+// night field (still ≥3:1 on both surfaces).
+private const val USAGE_DARKEN = 0.15f
 
 @Composable
 fun OverviewScreen(viewModel: OverviewViewModel = hiltViewModel()) {
@@ -144,7 +152,8 @@ private fun ModeToggle(mode: OverviewViewModel.Mode, onSelect: (OverviewViewMode
 private fun NightChart(nights: List<NightColumn>) {
     val dayLabels = stringResource(R.string.overview_day_labels).split(",")
     var selected by remember(nights) { mutableIntStateOf(-1) }
-    val usageColor = MaterialTheme.colorScheme.primary
+    val usageColor = lerp(MaterialTheme.colorScheme.primary, Color.Black, USAGE_DARKEN)
+    val nightColor = if (isSystemInDarkTheme()) NightTealDark else NightTealLight
     val lineColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
 
     Column {
@@ -174,13 +183,13 @@ private fun NightChart(nights: List<NightColumn>) {
                         }
                     },
             ) {
-                drawNight(nights, selected, usageColor, lineColor)
+                drawNight(nights, selected, usageColor, nightColor, lineColor)
             }
         }
         DayLabelRow(labels = dayLabels.take(DAYS), dimmed = false)
         nights.getOrNull(selected)?.let { night ->
             night.sleep?.let { sleep ->
-                SleepDetails(
+                NightDetails(
                     sleep = sleep,
                     eveningLabel = dayLabels[(selected + DAYS - 1) % DAYS],
                     morningLabel = dayLabels[selected],
@@ -220,10 +229,10 @@ private fun sleepHit(nights: List<NightColumn>, offset: Offset, width: Int, heig
 }
 
 @Composable
-private fun SleepDetails(sleep: NightTimeline.Span, eveningLabel: String, morningLabel: String) {
+private fun NightDetails(sleep: NightTimeline.Span, eveningLabel: String, morningLabel: String) {
     Column(modifier = Modifier.padding(top = 8.dp)) {
         Text(
-            text = stringResource(R.string.overview_sleep_title, eveningLabel, morningLabel),
+            text = stringResource(R.string.overview_night_title, eveningLabel, morningLabel),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
         )
@@ -233,7 +242,7 @@ private fun SleepDetails(sleep: NightTimeline.Span, eveningLabel: String, mornin
         )
         Text(
             text = stringResource(
-                R.string.overview_sleep_range,
+                R.string.overview_night_range,
                 clockLabel(sleep.startMinute),
                 clockLabel(sleep.endMinute),
             ),
@@ -252,6 +261,7 @@ private fun DrawScope.drawNight(
     nights: List<NightColumn>,
     selectedIndex: Int,
     usageColor: Color,
+    nightColor: Color,
     lineColor: Color,
 ) {
     if (nights.isEmpty()) return
@@ -267,9 +277,9 @@ private fun DrawScope.drawNight(
         val left = i * columnWidth + gap
         val barWidth = columnWidth - gap * 2
         column.sleep?.let { s ->
-            val alpha = if (i == selectedIndex) SLEEP_ALPHA_SELECTED else SLEEP_ALPHA
+            val alpha = if (i == selectedIndex) NIGHT_ALPHA_SELECTED else NIGHT_ALPHA
             drawRoundRect(
-                color = SleepTeal.copy(alpha = alpha),
+                color = nightColor.copy(alpha = alpha),
                 topLeft = Offset(left, y(s.startMinute)),
                 size = Size(barWidth, y(s.endMinute) - y(s.startMinute)),
                 cornerRadius = corner,

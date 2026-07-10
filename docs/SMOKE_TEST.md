@@ -15,12 +15,15 @@ Each item: ☐ = untested for this release. Expected result in *italics*.
    Blocks tab after updating; any old always/limit/schedule test rules are gone. *No crash on
    first launch (the migration ran).*
 3. ☐ Usage-access onboarding opens the right Settings screen and detects the grant.
-4. ☐ **Overview → Nights**: each column shows a teal sleep span around 04:30 (use past
-   midnight only delays its start); day pair labeled above/below each column (e.g. Su over Mo);
-   usage spans sit at the right times. Tapping a sleep span brightens it and shows start, end,
-   and duration below the chart; tapping again dismisses. Week pager: "Previous" stops at the
+4. ☐ **Overview → Nights**: past columns show a bright turquoise night span around 04:30 (use
+   past midnight only delays its start); future columns (04:30 not yet reached) show none; day
+   pair labeled above/below each column (e.g. Su over Mo); usage spans in the darker accent
+   blue. Tapping a night span brightens it and shows "Night · Su → Mo" with duration and
+   start–end below the chart; tapping again dismisses. Week pager: "Previous" stops at the
    oldest data, "Next" disabled on the current week.
-5. ☐ **Overview → Daily totals** toggle: Monday-start bars; per-day total ≈ Digital Wellbeing.
+5. ☐ **Overview → Daily totals** toggle: Monday-start bars; today's total within a few % of
+    Digital Wellbeing *at the same moment* (Dift now counts the in-progress session live).
+    If a gap remains, compare per-app numbers to find the culprit app.
 
 ## Usage-debt blocking
 
