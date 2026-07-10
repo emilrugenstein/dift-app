@@ -172,4 +172,66 @@ class SessionDeriverTest {
         val twice = SessionDeriver.derive(events, emptyList(), zone)
         assertEquals(once, twice)
     }
+
+    // --- class-aware derivation: within-app navigation must not truncate sessions ---
+
+    @Test
+    fun `trailing STOPPED of the previous activity does not kill the fresh session`() {
+        // Android's within-app handoff: PAUSED(act1) -> RESUMED(act2) -> STOPPED(act1)~1s later.
+        // The trailing STOPPED (mapped to PAUSED) must not close act2's session — all time until
+        // 10:20 belongs to com.a.
+        val result = SessionDeriver.derive(
+            events = listOf(
+                UsageEvent("com.a", RESUMED, at("2026-07-07T10:00:00Z"), "com.a.Main"),
+                UsageEvent("com.a", PAUSED, at("2026-07-07T10:05:00Z"), "com.a.Main"),
+                UsageEvent("com.a", RESUMED, at("2026-07-07T10:05:01Z"), "com.a.Detail"),
+                UsageEvent("com.a", PAUSED, at("2026-07-07T10:05:02Z"), "com.a.Main"), // STOPPED
+                UsageEvent("com.a", PAUSED, at("2026-07-07T10:20:00Z"), "com.a.Detail"),
+            ),
+            pendingOpen = emptyList(),
+            zone = zone,
+        )
+        assertEquals(2, result.sessions.size)
+        val second = result.sessions.maxBy { it.startMs }
+        assertEquals(at("2026-07-07T10:05:01Z"), second.startMs)
+        assertEquals(at("2026-07-07T10:20:00Z"), second.endMs) // NOT truncated at 10:05:02
+        assertTrue(result.openSessions.isEmpty())
+    }
+
+    @Test
+    fun `resumed class set survives the checkpoint across batches`() {
+        val first = SessionDeriver.derive(
+            events = listOf(
+                UsageEvent("com.a", RESUMED, at("2026-07-07T10:00:00Z"), "com.a.Main"),
+                UsageEvent("com.a", PAUSED, at("2026-07-07T10:05:00Z"), "com.a.Main"),
+                UsageEvent("com.a", RESUMED, at("2026-07-07T10:05:01Z"), "com.a.Detail"),
+            ),
+            pendingOpen = emptyList(),
+            zone = zone,
+        )
+        assertEquals(setOf("com.a.Detail"), first.openSessions.single().resumedClasses)
+
+        // The batch boundary fell between RESUMED(Detail) and the trailing STOPPED(Main):
+        // the carried class set keeps the session alive through the late STOPPED.
+        val second = SessionDeriver.derive(
+            events = listOf(
+                UsageEvent("com.a", PAUSED, at("2026-07-07T10:05:02Z"), "com.a.Main"), // STOPPED
+                UsageEvent("com.a", PAUSED, at("2026-07-07T10:20:00Z"), "com.a.Detail"),
+            ),
+            pendingOpen = first.openSessions,
+            zone = zone,
+        )
+        assertEquals(at("2026-07-07T10:20:00Z"), second.sessions.single().endMs)
+    }
+
+    @Test
+    fun `legacy open session without classes closes on any pause`() {
+        val result = SessionDeriver.derive(
+            events = listOf(UsageEvent("com.a", PAUSED, at("2026-07-07T10:45:00Z"), "com.a.Main")),
+            pendingOpen = listOf(OpenSession("com.a", at("2026-07-07T10:00:00Z"))),
+            zone = zone,
+        )
+        assertEquals(45 * 60_000L, result.sessions.single().durationMs)
+        assertTrue(result.openSessions.isEmpty())
+    }
 }

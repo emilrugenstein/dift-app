@@ -20,7 +20,9 @@ Each item: ☐ = untested for this release. Expected result in *italics*.
    usage spans sit at the right times. Tapping a sleep span brightens it and shows start, end,
    and duration below the chart; tapping again dismisses. Week pager: "Previous" stops at the
    oldest data, "Next" disabled on the current week.
-5. ☐ **Overview → Daily totals** toggle: Monday-start bars; per-day total ≈ Digital Wellbeing.
+5. ☐ **Overview → Daily totals** toggle: Monday-start bars; today's total within a few % of
+    Digital Wellbeing *at the same moment* (Dift now counts the in-progress session live).
+    If a gap remains, compare per-app numbers to find the culprit app.
 
 ## Usage-debt blocking
 

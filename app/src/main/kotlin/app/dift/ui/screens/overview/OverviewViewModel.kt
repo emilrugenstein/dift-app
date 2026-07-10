@@ -2,6 +2,7 @@ package app.dift.ui.screens.overview
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.dift.data.datastore.SettingsRepository
 import app.dift.data.repo.UsageRepository
 import app.dift.domain.engine.NightTimeline
 import app.dift.domain.engine.NightTimeline.NightColumn
@@ -20,11 +21,16 @@ import javax.inject.Inject
 /**
  * Drives the usage overview (docs/features/usage-overview.md): a night-aligned week chart or a
  * Monday-start totals chart over a selectable ISO week, with a data-bounded pager.
+ *
+ * Closed sessions come from Room; sessions that are still open (checkpoint state) are added at
+ * display time as `start → now` so "today" matches what Digital Wellbeing shows live. Nothing
+ * is written back, so there is no double counting once the session closes.
  */
 @HiltViewModel
 class OverviewViewModel @Inject constructor(
     private val usageRepository: UsageRepository,
     private val ingester: UsageStatsIngester,
+    private val settings: SettingsRepository,
 ) : ViewModel() {
 
     enum class Mode { NIGHT, TOTALS }
@@ -98,18 +104,32 @@ class OverviewViewModel @Inject constructor(
     private suspend fun buildNights(): List<NightColumn> {
         val fromMs = weekMonday.minusDays(1).atTime(NOON, 0).atZone(zone).toInstant().toEpochMilli()
         val toMs = weekMonday.plusDays(DAYS - 1L).atTime(NOON, 0).atZone(zone).toInstant().toEpochMilli()
-        val intervals = usageRepository.sessionsInRange(fromMs, toMs)
+        val closed = usageRepository.sessionsInRange(fromMs, toMs)
             .map { UsageInterval(it.startEpochMs, it.endEpochMs) }
-        return NightTimeline.buildWeek(intervals, weekMonday, zone)
+        // In-progress sessions drawn up to "now" (buildWeek clips them to the columns).
+        val nowMs = System.currentTimeMillis()
+        val live = settings.openSessions.first().map { UsageInterval(it.startMs, nowMs) }
+        return NightTimeline.buildWeek(closed + live, weekMonday, zone)
     }
 
     private suspend fun buildTotals(): List<DayBar> {
         val totalsByDay = usageRepository.observeDayTotals(weekMonday.toString()).first()
             .associate { it.dayLocal to it.totalMs }
+        val today = LocalDate.now()
+        val liveTodayMs = liveElapsedMs(today)
         return (0 until DAYS).map { offset ->
             val date = weekMonday.plusDays(offset.toLong())
-            DayBar(date, totalsByDay[date.toString()] ?: 0L)
+            val stored = totalsByDay[date.toString()] ?: 0L
+            DayBar(date, stored + if (date == today) liveTodayMs else 0L)
         }
+    }
+
+    /** Foreground time of still-open sessions since today's midnight — the live component. */
+    private suspend fun liveElapsedMs(today: LocalDate): Long {
+        val startOfDayMs = today.atStartOfDay(zone).toInstant().toEpochMilli()
+        val nowMs = System.currentTimeMillis()
+        return settings.openSessions.first()
+            .sumOf { (nowMs - maxOf(it.startMs, startOfDayMs)).coerceAtLeast(0) }
     }
 
     private fun isoMonday(date: LocalDate): LocalDate = date.minusDays((date.dayOfWeek.value - 1).toLong())

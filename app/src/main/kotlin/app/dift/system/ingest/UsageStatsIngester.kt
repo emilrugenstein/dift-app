@@ -66,12 +66,6 @@ class UsageStatsIngester @Inject constructor(
         }
     }
 
-    /** Milliseconds of foreground time for sessions currently open (live "used now" component). */
-    suspend fun openSessionElapsed(packageName: String, nowMs: Long): Long =
-        settings.openSessions.first()
-            .filter { it.packageName == packageName }
-            .sumOf { (nowMs - it.startMs).coerceAtLeast(0) }
-
     private fun readEvents(beginMs: Long, endMs: Long): List<UsageEvent> {
         val manager = context.getSystemService(UsageStatsManager::class.java)
         val usageEvents = manager.queryEvents(beginMs, endMs) ?: return emptyList()
@@ -89,7 +83,7 @@ class UsageStatsIngester @Inject constructor(
                 else -> null
             }
             if (type != null) {
-                out += UsageEvent(event.packageName, type, event.timeStamp)
+                out += UsageEvent(event.packageName, type, event.timeStamp, event.className)
             }
         }
         return out
