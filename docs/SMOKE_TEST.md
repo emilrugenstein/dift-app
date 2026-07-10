@@ -43,9 +43,10 @@ Each item: ☐ = untested for this release. Expected result in *italics*.
 
 ## Block editor & list
 
-15. ☐ Editor: all seven day chips visible (no cutoff); tapping a start/end time opens the
-    time-picker dialog; the app search field filters the exempt list. Blocks list: Delete asks
-    for confirmation, and is disabled while that block's window is running.
+15. ☐ Editor: all seven day chips visible (no cutoff); −/+ nudge start/end by 15 min and
+    tapping the time opens the time-picker dialog; the app search field filters the exempt
+    list. Blocks list: Delete asks for confirmation; while an enabled block's window is
+    running, both Delete and the enable switch are locked (a disabled block stays editable).
 
 ## Always
 

@@ -40,6 +40,8 @@ import app.dift.R
 import app.dift.ui.format.formatMinuteOfDay
 
 private const val BURST_STEP_SECONDS = 15
+private const val TIME_STEP_MINUTES = 15
+private const val DAY_MINUTES = 24 * 60
 private const val MINUTES_PER_HOUR = 60
 
 @Composable
@@ -153,10 +155,18 @@ private fun TimeField(label: String, minuteOfDay: Int, onChange: (Int) -> Unit) 
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(label, modifier = Modifier.weight(1f))
+        OutlinedButton(onClick = {
+            onChange((minuteOfDay - TIME_STEP_MINUTES + DAY_MINUTES) % DAY_MINUTES)
+        }) { Text("−") }
+        // Tapping the time itself opens the picker; −/+ nudge in 15-minute steps.
         OutlinedButton(onClick = { showPicker = true }) {
             Text(formatMinuteOfDay(minuteOfDay), style = MaterialTheme.typography.titleMedium)
+        }
+        OutlinedButton(onClick = { onChange((minuteOfDay + TIME_STEP_MINUTES) % DAY_MINUTES) }) {
+            Text("+")
         }
     }
     if (showPicker) {

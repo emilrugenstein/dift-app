@@ -24,18 +24,26 @@ class BlocksViewModel @Inject constructor(
 
     fun setEnabled(blockId: Long, enabled: Boolean) {
         viewModelScope.launch {
+            // Enabling is always allowed; switching OFF is refused while the block is live
+            // (backstop for the disabled switch — see lockedNow in BlocksScreen).
+            if (!enabled && lockedNow(blockId)) return@launch
             blockRepository.setEnabled(blockId, enabled, System.currentTimeMillis())
         }
     }
 
     fun delete(blockId: Long) {
         viewModelScope.launch {
-            val block = blockRepository.blocks.first().firstOrNull { it.id == blockId } ?: return@launch
-            // Backstop for the UI guard: a block whose window is running is never deletable —
-            // deleting the night block AT night is exactly the impulse Dift exists to resist.
-            if (BlockEngine.windowActive(block, ZonedDateTime.now())) return@launch
+            // Backstop for the UI guard: deleting the night block AT night is exactly the
+            // impulse Dift exists to resist.
+            if (lockedNow(blockId)) return@launch
             blockRepository.delete(blockId)
         }
+    }
+
+    /** An ENABLED block whose window is running right now is locked against disable/delete. */
+    private suspend fun lockedNow(blockId: Long): Boolean {
+        val block = blockRepository.blocks.first().firstOrNull { it.id == blockId } ?: return false
+        return block.enabled && BlockEngine.windowActive(block, ZonedDateTime.now())
     }
 
     private companion object {

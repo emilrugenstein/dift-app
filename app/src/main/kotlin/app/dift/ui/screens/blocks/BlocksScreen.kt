@@ -71,8 +71,11 @@ fun BlocksScreen(
             items(blocks, key = { it.id }) { block ->
                 BlockRow(
                     block = block,
-                    // No self-sabotage: a block can't be deleted while its window is running.
-                    deletable = !BlockEngine.windowActive(block, ZonedDateTime.now()),
+                    // No self-sabotage: while an ENABLED block's window is running it can be
+                    // neither deleted nor switched off. A disabled block is not enforcing
+                    // anything, so it stays freely editable.
+                    lockedNow = block.enabled &&
+                        BlockEngine.windowActive(block, ZonedDateTime.now()),
                     onEdit = { onEditBlock(block.id) },
                     onToggle = { viewModel.setEnabled(block.id, it) },
                     onDelete = { pendingDelete = block },
@@ -110,7 +113,7 @@ private fun DeleteConfirmDialog(block: Block, onConfirm: () -> Unit, onDismiss: 
 @Composable
 private fun BlockRow(
     block: Block,
-    deletable: Boolean,
+    lockedNow: Boolean,
     onEdit: () -> Unit,
     onToggle: (Boolean) -> Unit,
     onDelete: () -> Unit,
@@ -125,10 +128,10 @@ private fun BlockRow(
             Text(block.name, style = MaterialTheme.typography.bodyLarge)
             Text(text = subtitle(block), style = MaterialTheme.typography.bodySmall)
         }
-        TextButton(onClick = onDelete, enabled = deletable) {
+        TextButton(onClick = onDelete, enabled = !lockedNow) {
             Text(stringResource(R.string.blocks_delete))
         }
-        Switch(checked = block.enabled, onCheckedChange = onToggle)
+        Switch(checked = block.enabled, onCheckedChange = onToggle, enabled = !lockedNow)
     }
 }
 
