@@ -15,9 +15,11 @@ Each item: ☐ = untested for this release. Expected result in *italics*.
    Blocks tab after updating; any old always/limit/schedule test rules are gone. *No crash on
    first launch (the migration ran).*
 3. ☐ Usage-access onboarding opens the right Settings screen and detects the grant.
-4. ☐ **Overview → Nights**: after a few days, each column shows a translucent sleep gap
-   straddling midnight (the alarm marks the morning edge); usage spans sit at the right times.
-   Week pager: "Previous" stops at the oldest data, "Next" disabled on the current week.
+4. ☐ **Overview → Nights**: each column shows a teal sleep span around 04:30 (use past
+   midnight only delays its start); day pair labeled above/below each column (e.g. Su over Mo);
+   usage spans sit at the right times. Tapping a sleep span brightens it and shows start, end,
+   and duration below the chart; tapping again dismisses. Week pager: "Previous" stops at the
+   oldest data, "Next" disabled on the current week.
 5. ☐ **Overview → Daily totals** toggle: Monday-start bars; per-day total ≈ Digital Wellbeing.
 
 ## Usage-debt blocking
@@ -39,6 +41,13 @@ Each item: ☐ = untested for this release. Expected result in *italics*.
 14. ☐ Disabling the accessibility service triggers the watchdog notification; fallback polling
     still raises the lockout (overlay-only; the corner indicator may lag by ~1 s).
 
+## Block editor & list
+
+15. ☐ Editor: all seven day chips visible (no cutoff); −/+ nudge start/end by 15 min and
+    tapping the time opens the time-picker dialog; the app search field filters the exempt
+    list. Blocks list: Delete asks for confirmation; while an enabled block's window is
+    running, both Delete and the enable switch are locked (a disabled block stays editable).
+
 ## Always
 
-15. ☐ Battery: overnight drain with monitoring active is comparable to before (< a few %).
+16. ☐ Battery: overnight drain with monitoring active is comparable to before (< a few %).

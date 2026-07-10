@@ -21,12 +21,16 @@
     <string name="overview_mode_totals">Daily totals</string>
     <!-- Column headers, Monday first (nights lead into these weekdays). -->
     <string name="overview_day_labels">Mo,Tu,We,Th,Fr,Sa,Su</string>
+    <string name="overview_sleep_title">Sleep · %1$s → %2$s</string>
+    <string name="overview_sleep_range">%1$s – %2$s</string>
 
     <!-- Blocks -->
     <string name="blocks_title">Blocks</string>
     <string name="blocks_add">Add block</string>
     <string name="blocks_empty">No blocks yet. Add one to start rationing screen time.</string>
     <string name="blocks_delete">Delete</string>
+    <string name="blocks_delete_confirm_title">Delete block?</string>
+    <string name="blocks_delete_confirm_message">Deleting “%1$s” cannot be undone. A block whose window is running right now cannot be deleted.</string>
     <string name="block_window_format">%1$s – %2$s</string>
     <string name="block_burst_format">%1$d s</string>
 
@@ -39,7 +43,10 @@
     <string name="editor_burst_label">Max continuous use</string>
     <string name="editor_exempt_label">Exempt apps</string>
     <string name="editor_exempt_description">These stay usable during the block and never build up debt.</string>
+    <string name="editor_search_apps">Search apps</string>
     <string name="editor_save">Save block</string>
+    <string name="action_ok">OK</string>
+    <string name="action_cancel">Cancel</string>
     <string name="days_every_day">Every day</string>
     <string name="days_weekdays">Weekdays</string>
     <string name="days_weekends">Weekends</string>

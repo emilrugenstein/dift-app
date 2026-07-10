@@ -24,6 +24,12 @@ its old name) has:
 Blocks are always device-wide and always HARD — there is no unblock/grant/friction path. The
 only escape is time.
 
+**Live blocks are locked.** While an *enabled* block's window is running, it can be neither
+deleted nor switched off (UI-disabled, with a ViewModel backstop) — dismantling the night block
+at night is the exact impulse the feature exists to resist. The editor stays available as the
+deliberate escape valve: adding an exemption or moving the window end takes several conscious
+steps. A *disabled* block is not enforcing anything and stays freely deletable.
+
 ### Multiple blocks — strictest wins
 
 Several blocks may be active at once (e.g. a permissive "Work" block and a strict "Focus"
