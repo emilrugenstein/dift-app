@@ -51,7 +51,6 @@ import javax.inject.Singleton
  * [RESYNC_MS] (docs/features/usage-debt.md, "Hang safety net").
  */
 @Singleton
-@Suppress("LongParameterList") // the hot-path brain wires every live signal; splitting hides that
 class BlockingCoordinator @Inject constructor(
     private val tracker: ForegroundAppTracker,
     private val ownAppTracker: OwnAppForegroundTracker,
