@@ -86,10 +86,10 @@ private const val NIGHT_ALPHA_SELECTED = 0.85f
 // bright night field (still ≥3:1 on both surfaces).
 private const val USAGE_DARKEN = 0.15f
 
-// Everything-else usage marks: a plum-leaning dark violet. Pure violets are CVD-indistinguishable
-// from the darkened accent (protan/deutan ΔE ≈ 3–5); these steps pass all palette checks against
-// it (#C73E9E: ΔE 9.8 protan / 24 normal; #86198F: ΔE 12 deutan / 20 normal on light).
-private val OtherVioletDark = Color(0xFFC73E9E)
+// Everything-else usage marks: a dark violet, magenta-shifted just enough to stay tellable from
+// the darkened accent (pure violets sit at protan/deutan ΔE ≈ 3–5 against it). Both steps pass
+// all palette checks (#B62FA5: ΔE 8.9 protan / 22 normal; #86198F: ΔE 12 deutan / 20 normal).
+private val OtherVioletDark = Color(0xFFB62FA5)
 private val OtherVioletLight = Color(0xFF86198F)
 
 // Daily totals: y-scale never drops below 5 h so bar heights stay comparable across weeks.
