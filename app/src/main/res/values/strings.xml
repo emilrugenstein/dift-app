@@ -23,6 +23,12 @@
     <string name="overview_day_labels">Mo,Tu,We,Th,Fr,Sa,Su</string>
     <string name="overview_night_title">Night · %1$s → %2$s</string>
     <string name="overview_night_range">%1$s – %2$s</string>
+    <string name="overview_legend_not_bad">Not bad</string>
+    <string name="overview_legend_other">Other apps</string>
+    <string name="overview_avg_per_day">Ø %1$s per day</string>
+    <string name="overview_percent">%1$+d%%</string>
+    <string name="overview_vs_last_week">%1$s vs last week</string>
+    <string name="overview_vs_last_month">%1$s vs last 30 days</string>
 
     <!-- Blocks -->
     <string name="blocks_title">Blocks</string>
@@ -78,6 +84,8 @@
     <string name="settings_permission_battery">Battery optimization exemption</string>
     <string name="settings_open">Open</string>
     <string name="settings_blocks_hint">Create and edit night blocks in the Blocks tab.</string>
+    <string name="settings_not_bad_title">“Not bad” apps</string>
+    <string name="settings_not_bad_description">Apps you consider fine to use. They are preselected as exempt when you create a new block and shown in blue in the usage charts; everything else is violet.</string>
     <string name="home_version_label">Version %s</string>
 
     <!-- Accessibility service -->

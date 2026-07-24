@@ -58,6 +58,21 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[FORCE_POLLING] = value }
     }
 
+    // --- "Not bad" apps (preselected as exempt in new blocks; blue in the usage charts) ---
+    // A package set is a setting, not a table: it lives here as an encoded string (like the
+    // open-session checkpoint) because a structural Room migration cannot be verified in CI
+    // (docs/DATA_MODEL.md).
+
+    val notBadApps: Flow<Set<String>> = dataStore.data.map { decodePackages(it[NOT_BAD_APPS] ?: "") }
+
+    suspend fun toggleNotBadApp(packageName: String) {
+        dataStore.edit {
+            val current = decodePackages(it[NOT_BAD_APPS] ?: "")
+            val next = if (packageName in current) current - packageName else current + packageName
+            it[NOT_BAD_APPS] = next.joinToString(",")
+        }
+    }
+
     // --- Usage-debt cooldown (the only debt state that must survive process death and reboot) ---
 
     val cooldownStartedAt: Flow<Long?> = dataStore.data.map { it[COOLDOWN_STARTED_AT] }
@@ -73,6 +88,7 @@ class SettingsRepository @Inject constructor(
 
     private companion object {
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
+        val NOT_BAD_APPS = stringPreferencesKey("not_bad_apps")
         val LAST_INGESTED_EVENT_TIME = longPreferencesKey("last_ingested_event_time")
         val OPEN_SESSIONS = stringPreferencesKey("open_sessions")
         val RETENTION_DAYS = intPreferencesKey("retention_days")
@@ -90,6 +106,9 @@ class SettingsRepository @Inject constructor(
             sessions.joinToString(",") {
                 "${it.packageName}|${it.startMs}|${it.resumedClasses.joinToString(";")}"
             }
+
+        fun decodePackages(encoded: String): Set<String> =
+            encoded.split(',').filter { it.isNotBlank() }.toSet()
 
         fun decodeOpenSessions(encoded: String): List<OpenSession> =
             encoded.split(",").filter { it.contains('|') }.mapNotNull { entry ->

@@ -10,13 +10,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,6 +37,7 @@ import app.dift.R
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val permissions by viewModel.permissions.collectAsStateWithLifecycle()
+    val notBad by viewModel.notBadState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val packageUri = Uri.parse("package:${context.packageName}")
 
@@ -99,6 +103,45 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 style = MaterialTheme.typography.bodySmall,
             )
         }
+        item { HorizontalDivider() }
+        item {
+            Text(
+                text = stringResource(R.string.settings_not_bad_title),
+                style = MaterialTheme.typography.titleMedium,
+            )
+        }
+        item {
+            Text(
+                text = stringResource(R.string.settings_not_bad_description),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        item {
+            OutlinedTextField(
+                value = notBad.query,
+                onValueChange = viewModel::setQuery,
+                label = { Text(stringResource(R.string.editor_search_apps)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        items(notBad.filtered, key = { it.packageName }) { app ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = app.label,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f),
+                )
+                Checkbox(
+                    checked = app.packageName in notBad.notBad,
+                    onCheckedChange = { viewModel.toggleNotBad(app.packageName) },
+                )
+            }
+        }
+        item { HorizontalDivider() }
         item {
             Text(
                 text = stringResource(R.string.home_version_label, BuildConfig.VERSION_NAME),

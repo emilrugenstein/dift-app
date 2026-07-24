@@ -24,6 +24,7 @@ complexity:
   TooManyFunctions:
     thresholdInInterfaces: 20 # Room DAOs legitimately have many query methods
     thresholdInClasses: 20
+    thresholdInFiles: 20 # a Compose screen file is many small top-level composables by design
     ignoreAnnotatedFunctions: ['Preview']
 
 naming:

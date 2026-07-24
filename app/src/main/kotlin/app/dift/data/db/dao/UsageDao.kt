@@ -35,6 +35,10 @@ interface UsageDao {
     @Query("SELECT totalMs FROM daily_usage WHERE dayLocal = :dayLocal AND packageName = :packageName")
     suspend fun totalFor(dayLocal: String, packageName: String): Long?
 
+    /** Per-app day rollups in [fromDayLocal, toDayLocal] — feeds the two-color totals + averages. */
+    @Query("SELECT * FROM daily_usage WHERE dayLocal >= :fromDayLocal AND dayLocal <= :toDayLocal")
+    suspend fun dayAppTotalsInRange(fromDayLocal: String, toDayLocal: String): List<DailyUsageEntity>
+
     /** Closed sessions overlapping [fromMs, toMs) — feeds the night-aligned overview chart. */
     @Query(
         "SELECT * FROM usage_sessions WHERE endEpochMs > :fromMs AND startEpochMs < :toMs " +

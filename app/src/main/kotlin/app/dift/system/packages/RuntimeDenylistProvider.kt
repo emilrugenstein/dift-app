@@ -22,25 +22,40 @@ class RuntimeDenylistProvider @Inject constructor(
     @Volatile
     private var cached: Set<String> = emptySet()
 
+    @Volatile
+    private var cachedEscapes: Set<String> = emptySet()
+
     fun current(): Set<String> {
         if (cached.isEmpty()) refresh()
         return cached
     }
 
-    fun refresh() {
-        val result = mutableSetOf<String>()
-        val pm = context.packageManager
+    /**
+     * The runtime denylist WITHOUT launchers: the packages that still escape the whole-screen
+     * cooldown lockout (docs/features/usage-debt.md §5). The home screen deliberately gets no
+     * pass there — it would allow browsing recents previews mid-cooldown.
+     */
+    fun currentEscapes(): Set<String> {
+        if (cached.isEmpty()) refresh()
+        return cachedEscapes
+    }
 
-        val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-        pm.queryIntentActivities(homeIntent, PackageManager.ResolveInfoFlags.of(0L))
-            .forEach { result.add(it.activityInfo.packageName) }
+    fun refresh() {
+        val pm = context.packageManager
+        val escapes = mutableSetOf<String>()
 
         context.getSystemService(TelecomManager::class.java)
-            ?.defaultDialerPackage?.let(result::add)
+            ?.defaultDialerPackage?.let(escapes::add)
 
         context.getSystemService(InputMethodManager::class.java)
-            ?.enabledInputMethodList?.forEach { result.add(it.packageName) }
+            ?.enabledInputMethodList?.forEach { escapes.add(it.packageName) }
 
-        cached = result
+        val launchers = mutableSetOf<String>()
+        val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        pm.queryIntentActivities(homeIntent, PackageManager.ResolveInfoFlags.of(0L))
+            .forEach { launchers.add(it.activityInfo.packageName) }
+
+        cachedEscapes = escapes
+        cached = escapes + launchers
     }
 }

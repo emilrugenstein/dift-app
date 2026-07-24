@@ -20,7 +20,8 @@ class NightTimelineTest {
     private fun ms(iso: String): Long =
         LocalDateTime.parse(iso).atZone(zone).toInstant().toEpochMilli()
 
-    private fun interval(fromIso: String, toIso: String) = UsageInterval(ms(fromIso), ms(toIso))
+    private fun interval(fromIso: String, toIso: String, notBad: Boolean = false) =
+        UsageInterval(ms(fromIso), ms(toIso), notBad)
 
     /** Column 0 = the night whose morning is [monday]: Sun 2026-07-05 12:00 → Mon 2026-07-06 12:00. */
     private fun firstNight(intervals: List<UsageInterval>) =
@@ -54,7 +55,7 @@ class NightTimelineTest {
     }
 
     @Test
-    fun `sleep is the gap containing the 4-30 anchor, not the daytime idle gap`() {
+    fun `sleep is the gap intersecting the detection window, not the daytime idle gap`() {
         val night = firstNight(
             listOf(
                 interval("2026-07-05T22:00:00", "2026-07-05T22:30:00"), // evening
@@ -89,9 +90,66 @@ class NightTimelineTest {
     }
 
     @Test
-    fun `phone used across 4-30 yields no clear sleep`() {
-        val night = firstNight(listOf(interval("2026-07-06T04:20:00", "2026-07-06T04:40:00")))
+    fun `phone used across the whole detection window yields no clear sleep`() {
+        // 03:00–06:30 covers all of 03:30–06:00: neither surrounding gap touches the window.
+        val night = firstNight(listOf(interval("2026-07-06T03:00:00", "2026-07-06T06:30:00")))
         assertNull(night.sleep)
+    }
+
+    @Test
+    fun `a brief 4am wake-up no longer ends the night`() {
+        val night = firstNight(
+            listOf(
+                interval("2026-07-05T22:30:00", "2026-07-05T23:00:00"), // evening
+                interval("2026-07-06T04:00:00", "2026-07-06T04:05:00"), // brief wake-up
+                interval("2026-07-06T09:30:00", "2026-07-06T09:40:00"), // morning
+            ),
+        )
+        // Both gaps intersect 03:30–06:00; the post-wake-up one (04:05–09:30) is longer.
+        val sleep = requireNotNull(night.sleep)
+        assertEquals(16 * 60 + 5, sleep.startMinute)
+        assertEquals(21 * 60 + 30, sleep.endMinute)
+    }
+
+    @Test
+    fun `the longest intersecting gap wins even when it starts before the window`() {
+        val night = firstNight(
+            listOf(
+                interval("2026-07-05T23:00:00", "2026-07-05T23:10:00"), // evening
+                interval("2026-07-06T05:30:00", "2026-07-06T05:35:00"), // early alarm snooze
+                interval("2026-07-06T07:00:00", "2026-07-06T07:10:00"), // up for real
+            ),
+        )
+        // 23:10–05:30 (380 min) beats 05:35–07:00 (85 min).
+        val sleep = requireNotNull(night.sleep)
+        assertEquals(11 * 60 + 10, sleep.startMinute)
+        assertEquals(17 * 60 + 30, sleep.endMinute)
+    }
+
+    @Test
+    fun `usage spans carry their category and categories never merge together`() {
+        val night = firstNight(
+            listOf(
+                interval("2026-07-05T20:00:00", "2026-07-05T20:10:00", notBad = false),
+                interval("2026-07-05T20:10:30", "2026-07-05T20:20:00", notBad = true), // 30s gap
+            ),
+        )
+        // Same-category sessions would merge across 30 s; different categories must not.
+        assertEquals(2, night.usage.size)
+        assertEquals(setOf(false, true), night.usage.map { it.notBad }.toSet())
+    }
+
+    @Test
+    fun `sleep is derived from the union of both categories`() {
+        val night = firstNight(
+            listOf(
+                interval("2026-07-05T22:00:00", "2026-07-05T22:30:00", notBad = true),
+                interval("2026-07-06T07:00:00", "2026-07-06T07:15:00", notBad = false),
+            ),
+        )
+        val sleep = requireNotNull(night.sleep)
+        assertEquals(630, sleep.startMinute)
+        assertEquals(1140, sleep.endMinute)
     }
 
     @Test
