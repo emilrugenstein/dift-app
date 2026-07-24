@@ -5,7 +5,9 @@ Two stores with a strict split:
 - **Room** (`data/db/`): anything that is a *list of things* — blocks, exempt apps, sessions,
   aggregates, events.
 - **Preferences DataStore** (`data/datastore/`): *scalars only* — settings, the ingest
-  checkpoint, the persisted cooldown. Never lists.
+  checkpoint, the persisted cooldown. Never lists, with two deliberate encoded-string
+  exceptions (`openSessions`, `not_bad_apps`): both are small, both are settings-shaped, and a
+  structural Room migration cannot be verified in CI (no on-device schema check exists).
 
 ## v2 — usage-debt only
 
@@ -70,6 +72,7 @@ Retained from v1, unused. Pruned by the nightly rollup (a no-op on an empty tabl
 | cooldownUntil | Long? | usage-debt: cooldown deadline (epoch ms) — survives reboot |
 | retentionDays | Int | usage/event history retention (default 365) |
 | forcePollingMode | Boolean | force the polling detector instead of accessibility (debug aid) |
+| not_bad_apps | String | comma-joined package set: "Not bad" apps (blue in charts, preselected as exempt in new blocks) |
 
 The **burst** (continuous-use accumulator) is deliberately *not* persisted — a process restart
 breaks "continuous", which is the correct behaviour.

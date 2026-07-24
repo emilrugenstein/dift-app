@@ -1,17 +1,21 @@
 package app.dift.ui.screens.overview
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
@@ -40,7 +44,13 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -48,6 +58,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.dift.R
 import app.dift.domain.engine.NightTimeline
 import app.dift.domain.engine.NightTimeline.NightColumn
+import app.dift.domain.engine.UsageAverages
 import app.dift.ui.format.formatDuration
 import app.dift.ui.format.formatMinuteOfDay
 import java.time.format.DateTimeFormatter
@@ -63,17 +74,29 @@ private const val CORNER_PX = 5f
 private const val MINUTE_MS = 60_000L
 
 // Night-window hues, per mode (dark mode is its own step, not a flip). Both validated against
-// the darkened accent for CVD separation (ΔE ≥ 64) and surface contrast; the bright dark-mode
-// teal deliberately sits above the mark-lightness band — it is a background field, not a mark,
-// and the wide field vs. thin solid marks is the secondary (shape) encoding.
+// the usage marks for CVD separation and surface contrast; the bright dark-mode teal deliberately
+// sits above the mark-lightness band — it is a background field, not a mark, and the wide field
+// vs. thin solid marks is the secondary (shape) encoding.
 private val NightTealDark = Color(0xFF2DD4BF)
 private val NightTealLight = Color(0xFF0D9488)
 private const val NIGHT_ALPHA = 0.55f
 private const val NIGHT_ALPHA_SELECTED = 0.85f
 
-// Usage marks: the app accent, nudged darker so the marks read as "spent" against the bright
-// night field (still ≥3:1 on both surfaces).
+// "Not bad" usage marks: the app accent, nudged darker so the marks read as "spent" against the
+// bright night field (still ≥3:1 on both surfaces).
 private const val USAGE_DARKEN = 0.15f
+
+// Everything-else usage marks: a plum-leaning dark violet. Pure violets are CVD-indistinguishable
+// from the darkened accent (protan/deutan ΔE ≈ 3–5); these steps pass all palette checks against
+// it (#C73E9E: ΔE 9.8 protan / 24 normal; #86198F: ΔE 12 deutan / 20 normal on light).
+private val OtherVioletDark = Color(0xFFC73E9E)
+private val OtherVioletLight = Color(0xFF86198F)
+
+// Daily totals: y-scale never drops below 5 h so bar heights stay comparable across weeks.
+private const val TOTALS_HEIGHT_DP = 420
+private const val TOTALS_LABEL_SPACE_DP = 20
+private const val TOTALS_SCALE_FLOOR_MS = 5 * 3_600_000L
+private const val STACK_GAP_DP = 2f
 
 @Composable
 fun OverviewScreen(viewModel: OverviewViewModel = hiltViewModel()) {
@@ -83,6 +106,9 @@ fun OverviewScreen(viewModel: OverviewViewModel = hiltViewModel()) {
         viewModel.refresh()
         onPauseOrDispose { }
     }
+
+    val notBadColor = lerp(MaterialTheme.colorScheme.primary, Color.Black, USAGE_DARKEN)
+    val otherColor = if (isSystemInDarkTheme()) OtherVioletDark else OtherVioletLight
 
     Column(
         modifier = Modifier
@@ -94,8 +120,9 @@ fun OverviewScreen(viewModel: OverviewViewModel = hiltViewModel()) {
         WeekHeader(state, viewModel::prevWeek, viewModel::nextWeek)
         ModeToggle(state.mode, viewModel::setMode)
         when (state.mode) {
-            OverviewViewModel.Mode.NIGHT -> NightChart(state.nights)
-            OverviewViewModel.Mode.TOTALS -> TotalsChart(state.totals)
+            OverviewViewModel.Mode.NIGHT -> NightChart(state.nights, notBadColor, otherColor)
+            OverviewViewModel.Mode.TOTALS ->
+                TotalsChart(state.totals, state.averages, notBadColor, otherColor)
         }
     }
 }
@@ -149,16 +176,19 @@ private fun ModeToggle(mode: OverviewViewModel.Mode, onSelect: (OverviewViewMode
 }
 
 @Composable
-private fun NightChart(nights: List<NightColumn>) {
+private fun NightChart(nights: List<NightColumn>, notBadColor: Color, otherColor: Color) {
     val dayLabels = stringResource(R.string.overview_day_labels).split(",")
     var selected by remember(nights) { mutableIntStateOf(-1) }
-    val usageColor = lerp(MaterialTheme.colorScheme.primary, Color.Black, USAGE_DARKEN)
     val nightColor = if (isSystemInDarkTheme()) NightTealDark else NightTealLight
     val lineColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
 
     Column {
         // Evening day of each night — the column reads "Su ↓ Mo": dusk on top, morning below.
-        DayLabelRow(labels = List(DAYS) { dayLabels[(it + DAYS - 1) % DAYS] }, dimmed = true)
+        DayLabelRow(
+            labels = List(DAYS) { dayLabels[(it + DAYS - 1) % DAYS] },
+            dimmed = true,
+            startPadding = (AXIS_WIDTH_DP + CHART_START_PAD_DP).dp,
+        )
         Row(modifier = Modifier.fillMaxWidth()) {
             Column(
                 modifier = Modifier
@@ -183,10 +213,15 @@ private fun NightChart(nights: List<NightColumn>) {
                         }
                     },
             ) {
-                drawNight(nights, selected, usageColor, nightColor, lineColor)
+                drawNight(nights, selected, notBadColor, otherColor, nightColor, lineColor)
             }
         }
-        DayLabelRow(labels = dayLabels.take(DAYS), dimmed = false)
+        DayLabelRow(
+            labels = dayLabels.take(DAYS),
+            dimmed = false,
+            startPadding = (AXIS_WIDTH_DP + CHART_START_PAD_DP).dp,
+        )
+        ChartLegend(notBadColor, otherColor)
         nights.getOrNull(selected)?.let { night ->
             night.sleep?.let { sleep ->
                 NightDetails(
@@ -200,12 +235,12 @@ private fun NightChart(nights: List<NightColumn>) {
 }
 
 @Composable
-private fun DayLabelRow(labels: List<String>, dimmed: Boolean) {
+private fun DayLabelRow(labels: List<String>, dimmed: Boolean, startPadding: Dp = 0.dp) {
     val color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (dimmed) 0.5f else 1f)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = (AXIS_WIDTH_DP + CHART_START_PAD_DP).dp, top = 4.dp, bottom = 4.dp),
+            .padding(start = startPadding, top = 4.dp, bottom = 4.dp),
     ) {
         labels.forEach { label ->
             Text(
@@ -216,6 +251,35 @@ private fun DayLabelRow(labels: List<String>, dimmed: Boolean) {
                 modifier = Modifier.weight(1f),
             )
         }
+    }
+}
+
+@Composable
+private fun ChartLegend(notBadColor: Color, otherColor: Color) {
+    Row(
+        modifier = Modifier.padding(top = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        LegendEntry(notBadColor, stringResource(R.string.overview_legend_not_bad))
+        LegendEntry(otherColor, stringResource(R.string.overview_legend_other))
+    }
+}
+
+@Composable
+private fun LegendEntry(color: Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(10.dp)
+                .background(color, CircleShape),
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+            modifier = Modifier.padding(start = 6.dp),
+        )
     }
 }
 
@@ -260,7 +324,8 @@ private fun clockLabel(minuteFromNoon: Int): String {
 private fun DrawScope.drawNight(
     nights: List<NightColumn>,
     selectedIndex: Int,
-    usageColor: Color,
+    notBadColor: Color,
+    otherColor: Color,
     nightColor: Color,
     lineColor: Color,
 ) {
@@ -285,10 +350,12 @@ private fun DrawScope.drawNight(
                 cornerRadius = corner,
             )
         }
-        column.usage.forEach { span ->
+        // Violet ("other") first so overlapping "not bad" use stays visible on top.
+        column.usage.sortedBy { it.notBad }.forEach { span ->
             val top = y(span.startMinute)
             val height = (y(span.endMinute) - top).coerceAtLeast(minSpan)
-            drawRoundRect(usageColor, Offset(left, top), Size(barWidth, height), corner)
+            val color = if (span.notBad) notBadColor else otherColor
+            drawRoundRect(color, Offset(left, top), Size(barWidth, height), corner)
         }
     }
 
@@ -303,40 +370,139 @@ private fun DrawScope.drawNight(
 }
 
 @Composable
-private fun TotalsChart(totals: List<OverviewViewModel.DayBar>) {
+private fun TotalsChart(
+    totals: List<OverviewViewModel.DayBar>,
+    averages: UsageAverages.Result?,
+    notBadColor: Color,
+    otherColor: Color,
+) {
     val dayLabels = stringResource(R.string.overview_day_labels).split(",")
-    val max = totals.maxOfOrNull { it.totalMs }?.coerceAtLeast(1L) ?: 1L
-    val barColor = MaterialTheme.colorScheme.primary
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(CHART_HEIGHT_DP.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.Bottom,
-    ) {
-        totals.forEachIndexed { index, bar ->
-            Column(
-                modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Bottom,
-            ) {
-                Text(formatDuration(bar.totalMs), style = MaterialTheme.typography.labelSmall)
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height((bar.totalMs.toFloat() / max * TOTALS_BAR_MAX_DP).coerceAtLeast(2f).dp)
-                        .padding(top = 4.dp),
-                ) {
-                    drawRoundRect(barColor, cornerRadius = CornerRadius(CORNER_PX, CORNER_PX))
-                }
+    val textMeasurer = rememberTextMeasurer()
+    val labelStyle = MaterialTheme.typography.labelSmall
+        .copy(color = MaterialTheme.colorScheme.onSurface)
+    val lineColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+    // formatDuration is composable (strings.xml), so bar value labels are prepared up front.
+    val valueLabels = totals.map { formatDuration(it.totalMs) }
+
+    Column {
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(TOTALS_HEIGHT_DP.dp),
+        ) {
+            drawTotals(
+                bars = totals,
+                valueLabels = valueLabels,
+                avgMs = averages?.avgMsPerDay,
+                notBadColor = notBadColor,
+                otherColor = otherColor,
+                lineColor = lineColor,
+                textMeasurer = textMeasurer,
+                labelStyle = labelStyle,
+            )
+        }
+        DayLabelRow(labels = dayLabels.take(DAYS), dimmed = false)
+        averages?.let { AverageSummary(it) }
+        ChartLegend(notBadColor, otherColor)
+    }
+}
+
+@Composable
+private fun AverageSummary(averages: UsageAverages.Result) {
+    Column(modifier = Modifier.padding(top = 8.dp)) {
+        Text(
+            text = stringResource(R.string.overview_avg_per_day, formatDuration(averages.avgMsPerDay)),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            averages.vsPrevWeekPct?.let {
                 Text(
-                    text = dayLabels.getOrElse(index) { "" },
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(top = 2.dp),
+                    text = stringResource(
+                        R.string.overview_vs_last_week,
+                        stringResource(R.string.overview_percent, it),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                )
+            }
+            averages.vsPrevMonthPct?.let {
+                Text(
+                    text = stringResource(
+                        R.string.overview_vs_last_month,
+                        stringResource(R.string.overview_percent, it),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 )
             }
         }
     }
 }
 
-private const val TOTALS_BAR_MAX_DP = 260f
+@Suppress("LongParameterList") // a draw routine fed straight from composition state
+private fun DrawScope.drawTotals(
+    bars: List<OverviewViewModel.DayBar>,
+    valueLabels: List<String>,
+    avgMs: Long?,
+    notBadColor: Color,
+    otherColor: Color,
+    lineColor: Color,
+    textMeasurer: TextMeasurer,
+    labelStyle: TextStyle,
+) {
+    if (bars.isEmpty()) return
+    val scaleMax = maxOf(TOTALS_SCALE_FLOOR_MS, bars.maxOf { it.totalMs }).toFloat()
+    val columnWidth = size.width / bars.size
+    val gap = columnWidth * COLUMN_GAP_FRACTION
+    val corner = CornerRadius(CORNER_PX, CORNER_PX)
+    val minSpan = MIN_SPAN_DP.dp.toPx()
+    val stackGap = STACK_GAP_DP.dp.toPx()
+    val barArea = size.height - TOTALS_LABEL_SPACE_DP.dp.toPx()
+
+    fun heightOf(ms: Long): Float =
+        if (ms <= 0L) 0f else (ms / scaleMax * barArea).coerceAtLeast(minSpan)
+
+    bars.forEachIndexed { i, bar ->
+        val left = i * columnWidth + gap
+        val barWidth = columnWidth - gap * 2
+        val notBadHeight = heightOf(bar.notBadMs)
+        val otherHeight = heightOf(bar.otherMs)
+        val bottom = size.height
+        // "Not bad" (blue) sits on the baseline; "other" (violet) stacks above a 2px surface gap.
+        if (notBadHeight > 0f) {
+            drawRoundRect(notBadColor, Offset(left, bottom - notBadHeight), Size(barWidth, notBadHeight), corner)
+        }
+        if (otherHeight > 0f) {
+            val below = if (notBadHeight > 0f) notBadHeight + stackGap else 0f
+            drawRoundRect(
+                otherColor,
+                Offset(left, bottom - below - otherHeight),
+                Size(barWidth, otherHeight),
+                cornerRadius = corner,
+            )
+        }
+        if (bar.totalMs > 0L) {
+            val stackTop = bottom - notBadHeight - otherHeight -
+                (if (notBadHeight > 0f && otherHeight > 0f) stackGap else 0f)
+            val measured = textMeasurer.measure(AnnotatedString(valueLabels[i]), labelStyle)
+            drawText(
+                textLayoutResult = measured,
+                topLeft = Offset(
+                    x = left + barWidth / 2 - measured.size.width / 2,
+                    y = (stackTop - measured.size.height - 2.dp.toPx()).coerceAtLeast(0f),
+                ),
+            )
+        }
+    }
+
+    avgMs?.let {
+        val y = size.height - (it / scaleMax * barArea)
+        drawLine(
+            color = lineColor,
+            start = Offset(0f, y),
+            end = Offset(size.width, y),
+            strokeWidth = 1.5.dp.toPx(),
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f)),
+        )
+    }
+}

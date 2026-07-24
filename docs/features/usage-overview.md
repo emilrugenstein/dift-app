@@ -15,17 +15,20 @@ side, so the dark gap in the middle of each column *is* the night's sleep.
   (the night whose morning is the ISO week's Monday) and ending Saturday → Sunday. Each column
   is labeled with **both days**: the evening day above (dimmed) and the morning day below, so a
   column reads "Su ↓ Mo".
-- **Usage spans** (solid, the accent blue nudged darker) — every stretch the phone was actively
-  used, drawn at its time in the column. Per-app sessions are merged into device-usage intervals
-  first (gaps ≤ 60 s are treated as continuous), so app-switching doesn't fragment the picture.
+- **Usage spans** (solid) — every stretch the phone was actively used, drawn at its time in the
+  column. **"Not bad" apps** (chosen in Settings) draw in the accent blue nudged darker;
+  everything else draws in a plum-leaning **dark violet** (its own step per mode — pure violets
+  are CVD-indistinguishable from the blue). Per-app sessions are merged into device-usage
+  intervals per category (gaps ≤ 60 s are treated as continuous), so app-switching doesn't
+  fragment the picture; a small legend below the chart names the two colors.
 - **Night span** (bright turquoise field, fairly opaque, behind the usage spans; a darker teal
-  step in light mode) — the no-use gap **containing 04:30** (`SLEEP_ANCHOR_MINUTE`). The anchor
-  is 04:30, not midnight: scrolling past 00:00 must only *delay* the night's start, not erase
-  it, and nobody is deliberately on the phone at 04:30. The gap runs from the last use before
-  the anchor to the first use after (the morning alarm marks that edge); a night with use
-  *across* 04:30 has no clear span. Capped at the full 24 h column (past nights with no usage
-  show a full-height span). **Future nights show nothing**: a column whose 04:30 has not yet
-  happened has no night span (`buildWeek` takes `nowMs`).
+  step in light mode) — the **longest** no-use gap that **intersects 03:30–06:00**
+  (`NIGHT_WINDOW_START/END_MINUTE`). A window rather than a single anchor makes the pick
+  dynamic: use running past midnight only *delays* the night's start, and a brief 4 a.m.
+  wake-up no longer erases the night — the longer gap around it wins. A night with use across
+  the *whole* window has no clear span. Capped at the full 24 h column (past nights with no
+  usage show a full-height span). **Future nights show nothing**: a column whose 04:30 has not
+  yet happened has no night span (`buildWeek` takes `nowMs`).
 - **Tap a night span** to select it: the span brightens and a detail block appears below the
   chart labelled "Night · Su → Mo", with the duration in large type and the start–end times.
   Tapping it again (or tapping empty space) dismisses.
@@ -36,8 +39,26 @@ minutes-from-noon). No Android, no wall-clock — tested in `NightTimelineTest`.
 
 ## Totals view (toggle) — traditional daily totals
 
-A switch flips to a plain **Monday-start** bar chart: total screen time per calendar day,
-Monday → Sunday of the same ISO week. Reuses the `daily_usage` rollup.
+A switch flips to a **Monday-start** bar chart: total screen time per calendar day, Monday →
+Sunday of the same ISO week, built from the `daily_usage` rollup.
+
+- **Stacked by category**: the "Not bad" share (blue) sits on the baseline, everything else
+  (violet) stacks above it with a 2 px surface gap; the day's total is labeled above each stack.
+- **Comparable across weeks**: the y-scale is anchored at a **5 h** floor (it only grows when a
+  day exceeds it), and the chart is taller than before, so paging through weeks keeps bar
+  heights meaningful.
+- **Average line**: a dotted horizontal line marks the week's usage per day. Below the bars the
+  average is written out ("Ø 2h 41m per day") together with a signed percent change **vs last
+  week** and **vs the previous 30 days** (`UsageAverages`, pure + tested). Denominators only
+  count days that can have data: the current week stops at today, and days before the first
+  recorded data are excluded, so a fresh install doesn't fake a drop.
+
+## "Not bad" apps (Settings)
+
+A searchable app list in Settings (below the permissions) marks apps as **"Not bad"** — the
+usage you don't mind. The set is stored in DataStore (`not_bad_apps`), colors both chart views
+(blue vs violet), and is **preselected as the exempt list when creating a new block**
+(docs/features/usage-debt.md).
 
 ## Week pager
 

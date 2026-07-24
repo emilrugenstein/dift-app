@@ -16,10 +16,11 @@ its old name) has:
   block covers Fri 22:30 → Sat 06:00 even though most of it is Saturday).
 - **maxBurstSeconds** — the longest *continuous* stretch of blockable use allowed before the
   device locks. Default **60**.
-- **exempt packages** — apps that stay usable during the block and never accrue debt. Default:
-  **none** (everything opened while unlocked is blocked). Stored in `rule_apps`, repurposed
-  from its M2 meaning. The `SafetyDenylist` (dialer, Settings, SystemUI, launcher, IME, Dift)
-  is *always* exempt on top of this.
+- **exempt packages** — apps that stay usable during the block and never accrue debt. A **new**
+  block starts with the user's **"Not bad" apps** (Settings) preselected; clearing them all means
+  everything opened while unlocked is blocked. Stored in `rule_apps`, repurposed from its M2
+  meaning. The `SafetyDenylist` (dialer, Settings, SystemUI, launcher, IME, Dift) is *always*
+  exempt on top of this.
 
 Blocks are always device-wide and always HARD — there is no unblock/grant/friction path. The
 only escape is time.
@@ -54,16 +55,36 @@ State (`DebtState`): a **burst** (continuous-use accumulator, in memory only) an
    countdown overlay, `cooldownUntil = now + maxBurstSeconds` (1:1).
 4. **Early stop → lock.** Locking or screen-off after *X* < cap seconds ends the burst and sets
    `cooldownUntil = now + X` (1:1).
-5. **Cooldown is a wall-clock deadline.** It counts down whether the phone is locked or not.
-   Lock at 45 s used → 45 s cooldown; stay locked 15 s → unlock shows 30 s remaining
-   (`45 − 15`). Serving-time on the block overlay is free (never accrues a new burst).
+5. **Cooldown is a wall-clock deadline and covers the whole screen.** It counts down whether
+   the phone is locked or not. Lock at 45 s used → 45 s cooldown; stay locked 15 s → unlock
+   shows 30 s remaining (`45 − 15`). Serving-time on the block overlay is free (never accrues
+   a new burst). While the device is awake and unlocked, the lockout covers **everything —
+   home screen and recents included** (browsing app previews in recents was an unpriced peek);
+   locking the phone is the way out. The escapes: the dialer/Settings/keyboards
+   (`BlockEngine.cooldownEscaped` — the runtime denylist *without* launchers), the winning
+   block's exempt apps, and Dift itself (`OwnAppForegroundTracker`) — the app remains the
+   deliberate escape valve.
 6. **Persistence.** Only the cooldown (`cooldownStartedAt` / `cooldownUntil`) is persisted
    (DataStore); it must survive process death, locking, and reboot. The burst is ephemeral —
    a process restart breaks "continuous", which is correct.
 7. **Window exit.** Leaving the window cancels an in-flight burst (no debt) but an already-set
    cooldown still counts down to completion (leaving at 05:59 owing 40 s still costs 40 s).
-   While a cooldown bleeds past the window, only the `SafetyDenylist` is exempt.
+   While a cooldown bleeds past the window, only the safety escapes apply (no block, so no
+   exemptions).
 8. Outcome `DEBT_SERVED` is logged to `block_events` when a cooldown completes.
+
+## Hang safety net (self-healing pipeline)
+
+The ring occasionally froze in the field: a missed accessibility event, a missed
+lock/unlock broadcast, or an exception killing the ticker leaves `using` stuck false. Two
+defenses in `BlockingCoordinator`:
+
+- **No loop may die.** Every collector and periodic loop wraps each iteration in
+  `runCatching` — a failure is logged and the next tick still runs.
+- **Periodic ground-truth resync (5 min).** `DeviceStateMonitor.refresh()` re-reads keyguard +
+  screen state directly, and — while a block window or cooldown is live and the screen is
+  interactive — `ForegroundProbe` re-queries the latest `ACTIVITY_RESUMED` from UsageStats and
+  replays it into the tracker. A hung ring therefore heals itself within one resync period.
 
 ## The corner indicator (separate small overlay)
 

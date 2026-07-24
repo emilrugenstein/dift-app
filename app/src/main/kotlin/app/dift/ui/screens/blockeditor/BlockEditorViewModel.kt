@@ -2,6 +2,7 @@ package app.dift.ui.screens.blockeditor
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.dift.data.datastore.SettingsRepository
 import app.dift.data.repo.BlockRepository
 import app.dift.domain.SafetyDenylist
 import app.dift.domain.model.Block
@@ -20,6 +21,7 @@ import javax.inject.Inject
 class BlockEditorViewModel @Inject constructor(
     private val blockRepository: BlockRepository,
     private val appsProvider: InstalledAppsProvider,
+    private val settings: SettingsRepository,
 ) : ViewModel() {
 
     data class UiState(
@@ -50,7 +52,9 @@ class BlockEditorViewModel @Inject constructor(
             } else {
                 null
             }
-            state.value = existing?.toUiState(apps) ?: UiState(apps = apps)
+            // New blocks start with the "Not bad" apps exempt (docs/features/usage-debt.md).
+            state.value = existing?.toUiState(apps)
+                ?: UiState(apps = apps, exemptPackages = settings.notBadApps.first())
         }
     }
 

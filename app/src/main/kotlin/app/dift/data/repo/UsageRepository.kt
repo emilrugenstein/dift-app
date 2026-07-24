@@ -20,6 +20,9 @@ class UsageRepository @Inject constructor(
     suspend fun totalFor(dayLocal: String, packageName: String): Long =
         usageDao.totalFor(dayLocal, packageName) ?: 0L
 
+    suspend fun dayAppTotalsInRange(fromDayLocal: String, toDayLocal: String): List<DailyUsageEntity> =
+        usageDao.dayAppTotalsInRange(fromDayLocal, toDayLocal)
+
     suspend fun sessionsInRange(fromMs: Long, toMs: Long): List<UsageSessionEntity> =
         usageDao.sessionsInRange(fromMs, toMs)
 

@@ -88,4 +88,18 @@ class BlockEngineTest {
         assertFalse(BlockEngine.isBlockable("com.fp.launcher", b, setOf("com.fp.launcher"))) // runtime
         assertTrue(BlockEngine.isBlockable("com.instagram", null, emptySet())) // cooldown past window
     }
+
+    @Test
+    fun `cooldown escapes are the safety set and exemptions, but never the launcher`() {
+        val b = block(exempt = setOf("com.exempt"))
+        val escapes = setOf("com.fp.dialer", "com.fp.keyboard") // runtime denylist WITHOUT launchers
+        assertTrue(BlockEngine.cooldownEscaped("com.android.phone", b, escapes)) // static safety
+        assertTrue(BlockEngine.cooldownEscaped("com.fp.dialer", b, escapes)) // runtime dialer
+        assertTrue(BlockEngine.cooldownEscaped("com.exempt", b, escapes)) // block exemption
+        assertFalse(BlockEngine.cooldownEscaped("com.fp.launcher", b, escapes)) // home gets no pass
+        assertFalse(BlockEngine.cooldownEscaped("com.instagram", b, escapes))
+        // A cooldown outliving its window keeps only the safety escapes.
+        assertFalse(BlockEngine.cooldownEscaped("com.exempt", null, escapes))
+        assertTrue(BlockEngine.cooldownEscaped("com.fp.dialer", null, escapes))
+    }
 }

@@ -8,21 +8,26 @@ import kotlin.math.roundToInt
  * Pure derivation for the night-aligned usage chart (docs/features/usage-overview.md).
  *
  * Builds seven noon→noon columns for an ISO week. Each column places device-usage intervals by
- * time of day (midnight at the centre) and infers the night's sleep as the longest no-use gap.
+ * time of day (midnight at the centre) and infers the night as the longest no-use gap that
+ * intersects the 03:30–06:00 detection window. Usage carries a "not bad" category flag through
+ * to the spans so the chart can color the two kinds of use differently.
  * Time is injected (the week's Monday + zone); no wall-clock reads, no Android.
  */
 object NightTimeline {
 
-    /** A half-open interval of device use, in epoch millis. */
-    data class UsageInterval(val startMs: Long, val endMs: Long)
+    /** A half-open interval of device use, in epoch millis. [notBad] tags "Not bad" app usage. */
+    data class UsageInterval(val startMs: Long, val endMs: Long, val notBad: Boolean = false)
 
-    /** A span within a column, in minutes from the top (noon); 0..[MINUTES_PER_DAY], 720 = midnight. */
-    data class Span(val startMinute: Int, val endMinute: Int)
+    /**
+     * A span within a column, in minutes from the top (noon); 0..[MINUTES_PER_DAY], 720 = midnight.
+     * [notBad] carries the usage category; it is meaningless on the sleep span.
+     */
+    data class Span(val startMinute: Int, val endMinute: Int, val notBad: Boolean = false)
 
     /**
      * One night. [morningDate] is the weekday the night leads into (the column label); the window
-     * is [morningDate]−1 12:00 → [morningDate] 12:00. [sleep] is the inferred sleep gap, null only
-     * when the column has no no-use gap at all.
+     * is [morningDate]−1 12:00 → [morningDate] 12:00. [sleep] is the inferred night gap, null when
+     * the night has not happened yet or the phone was in use across the whole detection window.
      */
     data class NightColumn(
         val morningDate: LocalDate,
@@ -30,8 +35,15 @@ object NightTimeline {
         val sleep: Span?,
     )
 
+    /** The two usage categories merged separately + their union (the union defines the gaps). */
+    private class Merged(intervals: List<UsageInterval>) {
+        val all = merge(intervals)
+        val notBad = merge(intervals.filter { it.notBad })
+        val other = merge(intervals.filter { !it.notBad })
+    }
+
     /**
-     * @param intervals raw per-app session intervals (any order); merged internally.
+     * @param intervals raw per-app session intervals (any order); merged internally per category.
      * @param weekMonday the ISO week's Monday. Column 0 is the night whose morning is this Monday
      *   (Sunday → Monday); column 6 is Saturday → Sunday.
      * @param nowMs the current instant. A night whose 04:30 anchor is still in the future has no
@@ -43,7 +55,7 @@ object NightTimeline {
         zone: ZoneId,
         nowMs: Long,
     ): List<NightColumn> {
-        val merged = merge(intervals)
+        val merged = Merged(intervals)
         return (0 until DAYS_PER_WEEK).map { i ->
             val morning = weekMonday.plusDays(i.toLong())
             buildColumn(merged, morning, zone, nowMs)
@@ -51,7 +63,7 @@ object NightTimeline {
     }
 
     private fun buildColumn(
-        merged: List<UsageInterval>,
+        merged: Merged,
         morning: LocalDate,
         zone: ZoneId,
         nowMs: Long,
@@ -63,23 +75,26 @@ object NightTimeline {
         fun toMinute(ms: Long): Int =
             ((ms - startMs) / total * MINUTES_PER_DAY).roundToInt().coerceIn(0, MINUTES_PER_DAY)
 
-        val spans = merged
+        fun spansOf(intervals: List<UsageInterval>, notBad: Boolean): List<Span> = intervals
             .filter { it.endMs > startMs && it.startMs < endMs }
-            .map { Span(toMinute(it.startMs), toMinute(it.endMs)) }
+            .map { Span(toMinute(it.startMs), toMinute(it.endMs), notBad) }
             .filter { it.endMinute > it.startMinute }
 
         val anchorMs = morning.atTime(ANCHOR_HOUR, ANCHOR_MINUTE_OF_HOUR)
             .atZone(zone).toInstant().toEpochMilli()
-        val sleep = if (anchorMs > nowMs) null else sleepGap(spans)
-        return NightColumn(morningDate = morning, usage = spans, sleep = sleep)
+        val sleep = if (anchorMs > nowMs) null else sleepGap(spansOf(merged.all, false))
+        return NightColumn(
+            morningDate = morning,
+            usage = spansOf(merged.other, false) + spansOf(merged.notBad, true),
+            sleep = sleep,
+        )
     }
 
     /**
-     * The no-use gap that contains 04:30 — the deepest-sleep anchor. Midnight is too early: use
-     * that runs past 00:00 would otherwise erase the night, while nobody is deliberately on the
-     * phone at 04:30. The gap runs from the last use before the anchor to the first use after
-     * (the morning alarm marks that edge). Null when the phone was in use across 04:30 (no clear
-     * sleep); the whole column when unused.
+     * The night: the longest no-use gap that intersects the 03:30–06:00 detection window. The
+     * window (not a single anchor) makes the pick dynamic: a brief 4 a.m. wake-up no longer ends
+     * the night, and use running past midnight only delays its start. Null when the phone was in
+     * use across the whole window (no clear night); the whole column when unused.
      */
     private fun sleepGap(spans: List<Span>): Span? {
         if (spans.isEmpty()) return Span(0, MINUTES_PER_DAY)
@@ -91,9 +106,9 @@ object NightTimeline {
             cursor = maxOf(cursor, span.endMinute)
         }
         if (cursor < MINUTES_PER_DAY) gaps.add(Span(cursor, MINUTES_PER_DAY))
-        return gaps.firstOrNull {
-            it.startMinute <= SLEEP_ANCHOR_MINUTE && SLEEP_ANCHOR_MINUTE <= it.endMinute
-        }
+        return gaps
+            .filter { it.startMinute < NIGHT_WINDOW_END_MINUTE && it.endMinute > NIGHT_WINDOW_START_MINUTE }
+            .maxByOrNull { it.endMinute - it.startMinute }
     }
 
     /** Merge overlapping or near-adjacent (gap ≤ [MERGE_GAP_MS]) intervals into device-usage runs. */
@@ -113,8 +128,9 @@ object NightTimeline {
 
     const val MINUTES_PER_DAY = 24 * 60
 
-    /** 04:30 local, as minutes from the column top (noon): 12 h + 4 h 30 m. */
-    const val SLEEP_ANCHOR_MINUTE = 16 * 60 + 30
+    /** Night-detection window, minutes from the column top (noon): 03:30–06:00 local. */
+    const val NIGHT_WINDOW_START_MINUTE = 15 * 60 + 30
+    const val NIGHT_WINDOW_END_MINUTE = 18 * 60
 
     private const val ANCHOR_HOUR = 4
     private const val ANCHOR_MINUTE_OF_HOUR = 30

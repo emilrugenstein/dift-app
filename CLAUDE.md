@@ -22,7 +22,8 @@ Releases: push a tag `vX.Y.Z` → signed APK on a GitHub Release (docs/RELEASING
 ```
 app/src/main/kotlin/app/dift/
   domain/   PURE KOTLIN (no android.*/androidx.*). BlockEngine, DebtReducer, NightTimeline,
-            SessionDeriver, models, SafetyDenylist. Enforced by .../arch/DomainPurityTest.kt.
+            UsageAverages, SessionDeriver, models, SafetyDenylist. Enforced by
+            .../arch/DomainPurityTest.kt.
   data/     Room entities/DAOs, DataStore settings, repositories.
   system/   Android machinery: accessibility service, fallback monitor, overlay host,
             blocking coordinator, usage ingester, workers, receivers, permission checks.
