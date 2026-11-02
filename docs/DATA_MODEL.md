@@ -29,8 +29,26 @@ retired rows (see `Migrations.kt`). The consequences below are the important par
   is unchanged. `GrantMethod`, `RuleType`, `Strictness`, `BlockReason` survive as persistence-only
   enums (StorageEnums.kt) — never rename a constant.
 
-A genuine *structural* change from here still requires a real migration and a committed schema
-JSON (CLAUDE.md invariant #7).
+## v3 — challenges
+
+v3 adds two tables for challenges (docs/features/challenges.md) as a Room **AutoMigration**
+generated from the committed schema exports (`app/schemas/app.dift.data.db.DiftDatabase/2.json`
+→ `3.json`). From v3 on every version's export is committed and CI's *schema drift guard* fails
+the build if a compile produces a schema file that differs from the committed one (CLAUDE.md
+invariant #7 is now enforced, not just stated).
+
+### `challenges`
+`id`, `name`, `startDay` / `endDay` (inclusive local days as ISO text, so they sort and compare),
+`goalMinutesPerDay`, `createdAt`.
+
+### `challenge_entries`
+`id`, `challengeId` (FK → `challenges` ON DELETE CASCADE), `startEpochMs`, `endEpochMs`,
+`dayLocal` (the day the entry counts toward — the start day for timed entries), `manual`
+(hindsight entries are anchored at noon of `dayLocal` and only their duration matters). Index
+(challengeId, dayLocal) for day totals and (startEpochMs) for the overview's range query.
+
+A genuine *structural* change from here still requires a committed schema JSON and either an
+AutoMigration or a hand-written one (CLAUDE.md invariant #7).
 
 ## Room entities
 
@@ -73,6 +91,8 @@ Retained from v1, unused. Pruned by the nightly rollup (a no-op on an empty tabl
 | retentionDays | Int | usage/event history retention (default 365) |
 | forcePollingMode | Boolean | force the polling detector instead of accessibility (debug aid) |
 | not_bad_apps | String | comma-joined package set: "Not bad" apps (blue in charts, preselected as exempt in new blocks) |
+| challenge_timer_id / challenge_timer_started_at | Long? | the one running challenge timer; Stop writes the entry to Room and clears both |
+| overview_show_challenge | Boolean | whether the overview draws the green challenge layer (legend tap toggles) |
 
 The **burst** (continuous-use accumulator) is deliberately *not* persisted — a process restart
 breaks "continuous", which is the correct behaviour.

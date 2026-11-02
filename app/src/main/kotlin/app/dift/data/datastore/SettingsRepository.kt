@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import app.dift.domain.model.ChallengeTimer
 import app.dift.domain.model.OpenSession
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -73,6 +74,34 @@ class SettingsRepository @Inject constructor(
         }
     }
 
+    // --- Challenge timer (docs/features/challenges.md): only the start is stored, so a running
+    // timer survives process death and reboot; Stop writes the entry to Room. ---
+
+    val challengeTimer: Flow<ChallengeTimer?> = dataStore.data.map { prefs ->
+        val id = prefs[CHALLENGE_TIMER_ID]
+        val startedAt = prefs[CHALLENGE_TIMER_STARTED_AT]
+        if (id != null && startedAt != null) ChallengeTimer(id, startedAt) else null
+    }
+
+    suspend fun setChallengeTimer(timer: ChallengeTimer?) {
+        dataStore.edit {
+            if (timer == null) {
+                it.remove(CHALLENGE_TIMER_ID)
+                it.remove(CHALLENGE_TIMER_STARTED_AT)
+            } else {
+                it[CHALLENGE_TIMER_ID] = timer.challengeId
+                it[CHALLENGE_TIMER_STARTED_AT] = timer.startedAtMs
+            }
+        }
+    }
+
+    /** Whether the overview draws the green challenge layer (legend tap toggles it). */
+    val overviewShowChallenge: Flow<Boolean> = dataStore.data.map { it[OVERVIEW_SHOW_CHALLENGE] ?: true }
+
+    suspend fun setOverviewShowChallenge(value: Boolean) {
+        dataStore.edit { it[OVERVIEW_SHOW_CHALLENGE] = value }
+    }
+
     // --- Usage-debt cooldown (the only debt state that must survive process death and reboot) ---
 
     val cooldownStartedAt: Flow<Long?> = dataStore.data.map { it[COOLDOWN_STARTED_AT] }
@@ -95,6 +124,9 @@ class SettingsRepository @Inject constructor(
         val FORCE_POLLING = booleanPreferencesKey("force_polling_mode")
         val COOLDOWN_STARTED_AT = longPreferencesKey("debt_cooldown_started_at")
         val COOLDOWN_UNTIL = longPreferencesKey("debt_cooldown_until")
+        val CHALLENGE_TIMER_ID = longPreferencesKey("challenge_timer_id")
+        val CHALLENGE_TIMER_STARTED_AT = longPreferencesKey("challenge_timer_started_at")
+        val OVERVIEW_SHOW_CHALLENGE = booleanPreferencesKey("overview_show_challenge")
 
         const val DEFAULT_RETENTION_DAYS = 365
 

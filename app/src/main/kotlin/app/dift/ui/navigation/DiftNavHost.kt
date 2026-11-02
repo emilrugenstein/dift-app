@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -28,6 +29,8 @@ import androidx.navigation.navArgument
 import app.dift.R
 import app.dift.ui.screens.blockeditor.BlockEditorScreen
 import app.dift.ui.screens.blocks.BlocksScreen
+import app.dift.ui.screens.challengeeditor.ChallengeEditorScreen
+import app.dift.ui.screens.challenges.ChallengesScreen
 import app.dift.ui.screens.onboarding.OnboardingScreen
 import app.dift.ui.screens.overview.OverviewScreen
 import app.dift.ui.screens.settings.SettingsScreen
@@ -41,6 +44,7 @@ private data class NavDestination(
 private val destinations = listOf(
     NavDestination(Routes.OVERVIEW, R.string.nav_overview, Icons.Filled.DateRange),
     NavDestination(Routes.BLOCKS, R.string.nav_blocks, Icons.Filled.Lock),
+    NavDestination(Routes.CHALLENGES, R.string.nav_challenges, Icons.Filled.Star),
     NavDestination(Routes.SETTINGS, R.string.nav_settings, Icons.Filled.Settings),
 )
 
@@ -111,6 +115,24 @@ private fun MainScaffold() {
             ) { entry ->
                 val blockId = entry.arguments?.getLong(Routes.BLOCK_EDITOR_ARG) ?: 0L
                 BlockEditorScreen(blockId = blockId, onSaved = { navController.popBackStack() })
+            }
+            composable(Routes.CHALLENGES) {
+                ChallengesScreen(
+                    onAddChallenge = { navController.navigate(Routes.challengeEditor()) },
+                    onEditChallenge = { id -> navController.navigate(Routes.challengeEditor(id)) },
+                )
+            }
+            composable(
+                route = Routes.CHALLENGE_EDITOR_ROUTE,
+                arguments = listOf(
+                    navArgument(Routes.CHALLENGE_EDITOR_ARG) {
+                        type = NavType.LongType
+                        defaultValue = 0L
+                    },
+                ),
+            ) { entry ->
+                val challengeId = entry.arguments?.getLong(Routes.CHALLENGE_EDITOR_ARG) ?: 0L
+                ChallengeEditorScreen(challengeId = challengeId, onSaved = { navController.popBackStack() })
             }
             composable(Routes.SETTINGS) { SettingsScreen() }
         }

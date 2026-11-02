@@ -30,6 +30,14 @@ jobs:
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --stacktrace
 
+      # Room exports app/schemas/<db>/<version>.json at compile time; CLAUDE.md invariant #7 says
+      # every version's file is committed. A changed or missing file fails the build and the diff
+      # (with the full new file) lands in the log, so the exact export can be committed.
+      - name: Schema JSON must be committed (Room schema drift guard)
+        run: |
+          git add -N app/schemas
+          git diff --exit-code -- app/schemas
+
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:

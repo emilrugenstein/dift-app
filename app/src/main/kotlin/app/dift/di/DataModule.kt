@@ -9,6 +9,7 @@ import app.dift.data.db.DiftDatabase
 import app.dift.data.db.MIGRATION_1_2
 import app.dift.data.db.dao.BlockDao
 import app.dift.data.db.dao.BlockEventDao
+import app.dift.data.db.dao.ChallengeDao
 import app.dift.data.db.dao.GrantDao
 import app.dift.data.db.dao.UsageDao
 import dagger.Module
@@ -42,6 +43,9 @@ object DataModule {
 
     @Provides
     fun provideBlockEventDao(db: DiftDatabase): BlockEventDao = db.blockEventDao()
+
+    @Provides
+    fun provideChallengeDao(db: DiftDatabase): ChallengeDao = db.challengeDao()
 
     @Provides
     @Singleton

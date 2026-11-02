@@ -168,4 +168,21 @@ class NightTimelineTest {
         val night = firstNight(listOf(interval("2026-07-04T14:00:00", "2026-07-04T15:00:00")))
         assertTrue(night.usage.isEmpty())
     }
+
+    @Test
+    fun `challenge sessions are a separate layer and never close the night gap`() {
+        val week = NightTimeline.buildWeek(
+            intervals = listOf(interval("2026-07-06T07:00:00", "2026-07-06T07:15:00")),
+            weekMonday = monday,
+            zone = zone,
+            nowMs = weekOver,
+            challengeIntervals = listOf(interval("2026-07-06T05:00:00", "2026-07-06T05:30:00")),
+        )
+        val night = week.first()
+        // 05:00 = minute 1020 from noon; a challenge at 05:00 is not phone use: sleep still runs to 07:00.
+        assertEquals(1, night.challenge.size)
+        assertEquals(17 * 60, night.challenge.single().startMinute)
+        assertEquals(1140, requireNotNull(night.sleep).endMinute)
+        assertEquals(1, night.usage.size)
+    }
 }

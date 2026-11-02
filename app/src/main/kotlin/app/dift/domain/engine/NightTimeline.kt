@@ -28,18 +28,22 @@ object NightTimeline {
      * One night. [morningDate] is the weekday the night leads into (the column label); the window
      * is [morningDate]−1 12:00 → [morningDate] 12:00. [sleep] is the inferred night gap, null when
      * the night has not happened yet or the phone was in use across the whole detection window.
+     * [challenge] holds timed challenge sessions (docs/features/challenges.md) — a separate layer
+     * that is not phone use and never affects the sleep gap.
      */
     data class NightColumn(
         val morningDate: LocalDate,
         val usage: List<Span>,
         val sleep: Span?,
+        val challenge: List<Span> = emptyList(),
     )
 
     /** The two usage categories merged separately + their union (the union defines the gaps). */
-    private class Merged(intervals: List<UsageInterval>) {
+    private class Merged(intervals: List<UsageInterval>, challengeIntervals: List<UsageInterval>) {
         val all = merge(intervals)
         val notBad = merge(intervals.filter { it.notBad })
         val other = merge(intervals.filter { !it.notBad })
+        val challenge = merge(challengeIntervals)
     }
 
     /**
@@ -48,14 +52,16 @@ object NightTimeline {
      *   (Sunday → Monday); column 6 is Saturday → Sunday.
      * @param nowMs the current instant. A night whose 04:30 anchor is still in the future has no
      *   sleep gap yet — the night has not happened, so nothing is highlighted.
+     * @param challengeIntervals timed challenge sessions; drawn as their own layer.
      */
     fun buildWeek(
         intervals: List<UsageInterval>,
         weekMonday: LocalDate,
         zone: ZoneId,
         nowMs: Long,
+        challengeIntervals: List<UsageInterval> = emptyList(),
     ): List<NightColumn> {
-        val merged = Merged(intervals)
+        val merged = Merged(intervals, challengeIntervals)
         return (0 until DAYS_PER_WEEK).map { i ->
             val morning = weekMonday.plusDays(i.toLong())
             buildColumn(merged, morning, zone, nowMs)
@@ -87,6 +93,7 @@ object NightTimeline {
             morningDate = morning,
             usage = spansOf(merged.other, false) + spansOf(merged.notBad, true),
             sleep = sleep,
+            challenge = spansOf(merged.challenge, false),
         )
     }
 
