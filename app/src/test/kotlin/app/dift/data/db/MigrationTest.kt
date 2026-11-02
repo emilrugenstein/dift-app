@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -46,7 +47,8 @@ class MigrationTest {
                 val entity = entities.getJSONObject(i)
                 val table = entity.getString("tableName")
                 db.execSQL(entity.getString("createSql").replace("\${TABLE_NAME}", table))
-                val indices = entity.getJSONArray("indices")
+                // Room leaves the key out entirely for entities without indices.
+                val indices = entity.optJSONArray("indices") ?: JSONArray()
                 for (j in 0 until indices.length()) {
                     val index = indices.getJSONObject(j)
                     db.execSQL(
