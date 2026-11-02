@@ -22,7 +22,7 @@ Releases: push a tag `vX.Y.Z` → signed APK on a GitHub Release (docs/RELEASING
 ```
 app/src/main/kotlin/app/dift/
   domain/   PURE KOTLIN (no android.*/androidx.*). BlockEngine, DebtReducer, NightTimeline,
-            UsageAverages, SessionDeriver, models, SafetyDenylist. Enforced by
+            UsageAverages, ChallengeProgress, SessionDeriver, models, SafetyDenylist. Enforced by
             .../arch/DomainPurityTest.kt.
   data/     Room entities/DAOs, DataStore settings, repositories.
   system/   Android machinery: accessibility service, fallback monitor, overlay host,
@@ -31,9 +31,11 @@ app/src/main/kotlin/app/dift/
   di/       Hilt modules.
 ```
 
-Dift does two things: (1) **usage-debt blocking** — the only blocking mechanism; time-windowed
+Dift does three things: (1) **usage-debt blocking** — the only blocking mechanism; time-windowed
 "blocks" ration continuous use and repay it with equal lockouts (docs/features/usage-debt.md),
-and (2) a **night-aligned usage overview** that infers sleep (docs/features/usage-overview.md).
+(2) a **night-aligned usage overview** that infers sleep (docs/features/usage-overview.md), and
+(3) **challenges** — timed daily goals ("Mobility, 30 min/day") shown beside screen time
+(docs/features/challenges.md).
 
 Runtime flow: detection (accessibility service, or polling fallback) → `ForegroundAppTracker`
 → `BlockingCoordinator`, which runs the pure `BlockEngine` (which block is in force) + `DebtReducer`
@@ -54,6 +56,8 @@ and the small corner indicator. No home-kick, no Activity. Details + diagram: do
 5. **All user-facing strings live in `res/values/strings.xml`.** No hardcoded UI text in Kotlin.
 6. **One screen + one ViewModel per folder** under `ui/screens/`.
 7. **Room schema changes require a migration and a committed schema JSON** (app/schemas/).
+   CI's schema drift guard fails the build when a compile's export differs from the committed
+   file; the diff in the log *is* the file to commit.
 8. **The accessibility service keeps `canRetrieveWindowContent="false"`.** Dift never reads
    screen content — only window-change events.
 9. **Dependencies are declared only in `gradle/libs.versions.toml`.**

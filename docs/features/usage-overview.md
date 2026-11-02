@@ -53,6 +53,14 @@ Sunday of the same ISO week, built from the `daily_usage` rollup.
   count days that can have data: the current week stops at today, and days before the first
   recorded data are excluded, so a fresh install doesn't fake a drop.
 
+## Challenge layer (green, toggleable)
+
+Timed challenge sessions (docs/features/challenges.md) are drawn in green in both views — a
+narrow strip on the right edge of a night column at the session's real time, and a narrow bar
+beside each day's usage stack in the totals view (manual entries included there). Challenge time
+is never part of the screen-time numbers. The legend's **Challenge** entry is a toggle: tapping
+it hides/shows the layer (persisted as `overview_show_challenge`); hidden state is drawn dimmed.
+
 ## "Not bad" apps (Settings)
 
 A searchable app list in Settings (below the permissions) marks apps as **"Not bad"** — the

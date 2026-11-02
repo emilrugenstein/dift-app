@@ -3,6 +3,7 @@ package app.dift.ui.screens.overview
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.dift.data.datastore.SettingsRepository
+import app.dift.data.repo.ChallengeRepository
 import app.dift.data.repo.UsageRepository
 import app.dift.domain.engine.NightTimeline
 import app.dift.domain.engine.NightTimeline.NightColumn
@@ -22,7 +23,8 @@ import javax.inject.Inject
 /**
  * Drives the usage overview (docs/features/usage-overview.md): a night-aligned week chart or a
  * Monday-start totals chart over a selectable ISO week, with a data-bounded pager. Usage is split
- * into "Not bad" apps (blue) and everything else (violet) in both views.
+ * into "Not bad" apps (blue) and everything else (violet) in both views; timed challenge sessions
+ * (docs/features/challenges.md) are a third, toggleable green layer that is never counted as usage.
  *
  * Closed sessions come from Room; sessions that are still open (checkpoint state) are added at
  * display time as `start → now` so "today" matches what Digital Wellbeing shows live. Nothing
@@ -33,11 +35,13 @@ class OverviewViewModel @Inject constructor(
     private val usageRepository: UsageRepository,
     private val ingester: UsageStatsIngester,
     private val settings: SettingsRepository,
+    private val challengeRepository: ChallengeRepository,
 ) : ViewModel() {
 
     enum class Mode { NIGHT, TOTALS }
 
-    data class DayBar(val date: LocalDate, val notBadMs: Long, val otherMs: Long) {
+    /** [challengeMs] is logged challenge time — shown beside the usage stack, never inside [totalMs]. */
+    data class DayBar(val date: LocalDate, val notBadMs: Long, val otherMs: Long, val challengeMs: Long = 0L) {
         val totalMs: Long get() = notBadMs + otherMs
     }
 
@@ -49,6 +53,7 @@ class OverviewViewModel @Inject constructor(
         val nights: List<NightColumn> = emptyList(),
         val totals: List<DayBar> = emptyList(),
         val averages: UsageAverages.Result? = null,
+        val showChallenge: Boolean = true,
     )
 
     private val zone: ZoneId get() = ZoneId.systemDefault()
@@ -93,6 +98,14 @@ class OverviewViewModel @Inject constructor(
         viewModelScope.launch { state.value = compute() }
     }
 
+    /** Legend tap: hide/show the green challenge layer (persisted). */
+    fun toggleChallenge() {
+        viewModelScope.launch {
+            settings.setOverviewShowChallenge(!settings.overviewShowChallenge.first())
+            state.value = compute()
+        }
+    }
+
     private suspend fun compute(): UiState {
         val nights = if (mode == Mode.NIGHT) buildNights() else emptyList()
         val totals = if (mode == Mode.TOTALS) buildTotals() else null
@@ -104,6 +117,7 @@ class OverviewViewModel @Inject constructor(
             nights = nights,
             totals = totals?.first ?: emptyList(),
             averages = totals?.second,
+            showChallenge = settings.overviewShowChallenge.first(),
         )
     }
 
@@ -116,7 +130,11 @@ class OverviewViewModel @Inject constructor(
         // In-progress sessions drawn up to "now" (buildWeek clips them to the columns).
         val nowMs = System.currentTimeMillis()
         val live = settings.openSessions.first().map { UsageInterval(it.startMs, nowMs, it.packageName in notBad) }
-        return NightTimeline.buildWeek(closed + live, weekMonday, zone, nowMs)
+        val timer = settings.challengeTimer.first()
+        val challenge = challengeRepository.timedEntriesInRange(fromMs, toMs)
+            .map { UsageInterval(it.startMs, it.endMs) } +
+            listOfNotNull(timer?.let { UsageInterval(it.startedAtMs, nowMs) })
+        return NightTimeline.buildWeek(closed + live, weekMonday, zone, nowMs, challengeIntervals = challenge)
     }
 
     /** The week's bars split by category, plus the per-day average with week/month comparisons. */
@@ -127,6 +145,9 @@ class OverviewViewModel @Inject constructor(
         val to = weekMonday.plusDays(DAYS - 1L)
         val rows = usageRepository.dayAppTotalsInRange(from.toString(), to.toString())
         val (liveNotBadMs, liveOtherMs) = liveElapsedByCategory(today, notBad)
+        val challengeByDay = challengeRepository.dayTotalsInRange(weekMonday, to)
+        val liveChallengeMs = settings.challengeTimer.first()
+            ?.let { (System.currentTimeMillis() - it.startedAtMs).coerceAtLeast(0L) } ?: 0L
 
         val byDay = rows.groupBy { it.dayLocal }
         val bars = (0 until DAYS).map { offset ->
@@ -136,7 +157,8 @@ class OverviewViewModel @Inject constructor(
                 if (date == today) liveNotBadMs else 0L
             val otherMs = dayRows.filterNot { it.packageName in notBad }.sumOf { it.totalMs } +
                 if (date == today) liveOtherMs else 0L
-            DayBar(date, notBadMs, otherMs)
+            val challengeMs = (challengeByDay[date] ?: 0L) + if (date == today) liveChallengeMs else 0L
+            DayBar(date, notBadMs, otherMs, challengeMs)
         }
 
         val totalsByDay = byDay.entries.associate { (day, dayRows) ->

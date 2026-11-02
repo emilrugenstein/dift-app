@@ -4,14 +4,15 @@ Single Gradle module (`:app`), strict package layering. Kotlin + Jetpack Compose
 Hilt, Room + DataStore, WorkManager. minSdk = targetSdk-ish single-device app (Fairphone 6,
 Android 15/16) — no backward-compat code.
 
-Dift has two features: **usage-debt blocking** (the only blocking mechanism —
-docs/features/usage-debt.md) and a **night-aligned usage overview** (docs/features/usage-overview.md).
+Dift has three features: **usage-debt blocking** (the only blocking mechanism —
+docs/features/usage-debt.md), a **night-aligned usage overview** (docs/features/usage-overview.md),
+and **challenges** — timed daily goals shown next to screen time (docs/features/challenges.md).
 
 ## Layers
 
 | Package   | Contents | Rules |
 |-----------|----------|-------|
-| `domain/` | `BlockEngine`, `DebtReducer`, `NightTimeline`, `SessionDeriver`, models, `SafetyDenylist` | **Pure Kotlin.** No `android.*`/`androidx.*` imports, no wall-clock reads (time is a parameter). Enforced by `DomainPurityTest` (Konsist). |
+| `domain/` | `BlockEngine`, `DebtReducer`, `NightTimeline`, `UsageAverages`, `ChallengeProgress`, `SessionDeriver`, models, `SafetyDenylist` | **Pure Kotlin.** No `android.*`/`androidx.*` imports, no wall-clock reads (time is a parameter). Enforced by `DomainPurityTest` (Konsist). |
 | `data/`   | Room database (entities, DAOs), DataStore settings, repositories | Repositories are the only DB/DataStore consumers; expose Flows + suspend functions. |
 | `system/` | Accessibility service, fallback monitor FGS, `ForegroundAppTracker`, `DeviceStateMonitor`, `BlockingCoordinator`, `OverlayComposeHost` + `OverlayController`/`IndicatorOverlayController`, `UsageStatsIngester`, workers, `BootReceiver`, `PermissionsChecker` | Android machinery. Services stay thin — logic in `domain/`, orchestration in `BlockingCoordinator`. |
 | `ui/`     | Compose screens (one folder per screen: `XScreen.kt` + `XViewModel.kt`), theme, navigation, overlay content (`BlockScreenContent`, `IndicatorContent`) | ViewModels talk to repositories/coordinator only. All text via `strings.xml`. |
@@ -65,11 +66,12 @@ DeviceStateMonitor ────→  BlockingCoordinator ──→ BlockEngine.ac
 
 ## State & persistence
 
-- **Room** (`dift.db`, v2): blocks (`block_rules`), block↔exempt-app cross-refs (`rule_apps`),
-  usage sessions, daily aggregates, block events. `unblock_grants` survives from v1 for schema
-  stability but is unused. `MIGRATION_1_2` deletes retired rows without touching structure — see
-  docs/DATA_MODEL.md and `Migrations.kt`.
+- **Room** (`dift.db`, v3): blocks (`block_rules`), block↔exempt-app cross-refs (`rule_apps`),
+  usage sessions, daily aggregates, block events, challenges + challenge entries.
+  `unblock_grants` survives from v1 for schema stability but is unused. `MIGRATION_1_2` deletes
+  retired rows without touching structure; v2 → v3 is a Room AutoMigration from the committed
+  schema JSONs (`app/schemas/`, guarded by CI) — see docs/DATA_MODEL.md and `Migrations.kt`.
 - **DataStore**: scalar settings + ingest checkpoint + the persisted cooldown
-  (`cooldownStartedAt`, `cooldownUntil` — must survive process death and reboot). The burst is
-  in-memory only.
+  (`cooldownStartedAt`, `cooldownUntil` — must survive process death and reboot) + the running
+  challenge timer (`challenge_timer_*`, same reason). The burst is in-memory only.
 - Split rationale: docs/DATA_MODEL.md.

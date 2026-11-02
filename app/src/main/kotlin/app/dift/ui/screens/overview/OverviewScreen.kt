@@ -2,6 +2,7 @@ package app.dift.ui.screens.overview
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -92,6 +93,17 @@ private const val USAGE_DARKEN = 0.15f
 private val OtherVioletDark = Color(0xFFB62FA5)
 private val OtherVioletLight = Color(0xFF86198F)
 
+// Challenge sessions (docs/features/challenges.md): a green that stays tellable from the teal
+// night field AND both usage marks (dark #6AA431: contrast 6.2:1, CVD ΔE ≥ 13 vs all three;
+// light #3F6212: contrast 6.8:1, CVD ΔE ≥ 11). Drawn as a narrow strip / side bar, never stacked
+// into usage.
+private val ChallengeGreenDark = Color(0xFF6AA431)
+private val ChallengeGreenLight = Color(0xFF3F6212)
+private const val CHALLENGE_STRIP_FRACTION = 0.36f
+private const val TOTALS_USAGE_FRACTION = 0.64f
+private const val TOTALS_CHALLENGE_FRACTION = 0.28f
+private const val LEGEND_HIDDEN_ALPHA = 0.35f
+
 // Daily totals: y-scale never drops below 5 h so bar heights stay comparable across weeks.
 private const val TOTALS_HEIGHT_DP = 420
 private const val TOTALS_LABEL_SPACE_DP = 20
@@ -107,8 +119,13 @@ fun OverviewScreen(viewModel: OverviewViewModel = hiltViewModel()) {
         onPauseOrDispose { }
     }
 
-    val notBadColor = lerp(MaterialTheme.colorScheme.primary, Color.Black, USAGE_DARKEN)
-    val otherColor = if (isSystemInDarkTheme()) OtherVioletDark else OtherVioletLight
+    val dark = isSystemInDarkTheme()
+    val palette = ChartPalette(
+        notBad = lerp(MaterialTheme.colorScheme.primary, Color.Black, USAGE_DARKEN),
+        other = if (dark) OtherVioletDark else OtherVioletLight,
+        challenge = if (dark) ChallengeGreenDark else ChallengeGreenLight,
+        showChallenge = state.showChallenge,
+    )
 
     Column(
         modifier = Modifier
@@ -120,12 +137,20 @@ fun OverviewScreen(viewModel: OverviewViewModel = hiltViewModel()) {
         WeekHeader(state, viewModel::prevWeek, viewModel::nextWeek)
         ModeToggle(state.mode, viewModel::setMode)
         when (state.mode) {
-            OverviewViewModel.Mode.NIGHT -> NightChart(state.nights, notBadColor, otherColor)
+            OverviewViewModel.Mode.NIGHT -> NightChart(state.nights, palette, viewModel::toggleChallenge)
             OverviewViewModel.Mode.TOTALS ->
-                TotalsChart(state.totals, state.averages, notBadColor, otherColor)
+                TotalsChart(state.totals, state.averages, palette, viewModel::toggleChallenge)
         }
     }
 }
+
+/** The three series colors + whether the challenge layer is currently drawn. */
+private data class ChartPalette(
+    val notBad: Color,
+    val other: Color,
+    val challenge: Color,
+    val showChallenge: Boolean,
+)
 
 @Composable
 private fun WeekHeader(state: OverviewViewModel.UiState, onPrev: () -> Unit, onNext: () -> Unit) {
@@ -176,7 +201,7 @@ private fun ModeToggle(mode: OverviewViewModel.Mode, onSelect: (OverviewViewMode
 }
 
 @Composable
-private fun NightChart(nights: List<NightColumn>, notBadColor: Color, otherColor: Color) {
+private fun NightChart(nights: List<NightColumn>, palette: ChartPalette, onToggleChallenge: () -> Unit) {
     val dayLabels = stringResource(R.string.overview_day_labels).split(",")
     var selected by remember(nights) { mutableIntStateOf(-1) }
     val nightColor = if (isSystemInDarkTheme()) NightTealDark else NightTealLight
@@ -213,7 +238,7 @@ private fun NightChart(nights: List<NightColumn>, notBadColor: Color, otherColor
                         }
                     },
             ) {
-                drawNight(nights, selected, notBadColor, otherColor, nightColor, lineColor)
+                drawNight(nights, selected, palette, nightColor, lineColor)
             }
         }
         DayLabelRow(
@@ -221,7 +246,7 @@ private fun NightChart(nights: List<NightColumn>, notBadColor: Color, otherColor
             dimmed = false,
             startPadding = (AXIS_WIDTH_DP + CHART_START_PAD_DP).dp,
         )
-        ChartLegend(notBadColor, otherColor)
+        ChartLegend(palette, onToggleChallenge)
         nights.getOrNull(selected)?.let { night ->
             night.sleep?.let { sleep ->
                 NightDetails(
@@ -255,29 +280,40 @@ private fun DayLabelRow(labels: List<String>, dimmed: Boolean, startPadding: Dp 
 }
 
 @Composable
-private fun ChartLegend(notBadColor: Color, otherColor: Color) {
+private fun ChartLegend(palette: ChartPalette, onToggleChallenge: () -> Unit) {
     Row(
         modifier = Modifier.padding(top = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        LegendEntry(notBadColor, stringResource(R.string.overview_legend_not_bad))
-        LegendEntry(otherColor, stringResource(R.string.overview_legend_other))
+        LegendEntry(palette.notBad, stringResource(R.string.overview_legend_not_bad))
+        LegendEntry(palette.other, stringResource(R.string.overview_legend_other))
+        // The challenge entry is a toggle: tapping it hides/shows the green layer.
+        LegendEntry(
+            color = palette.challenge,
+            label = stringResource(R.string.overview_legend_challenge),
+            dimmed = !palette.showChallenge,
+            onClick = onToggleChallenge,
+        )
     }
 }
 
 @Composable
-private fun LegendEntry(color: Color, label: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+private fun LegendEntry(color: Color, label: String, dimmed: Boolean = false, onClick: (() -> Unit)? = null) {
+    val alpha = if (dimmed) LEGEND_HIDDEN_ALPHA else 1f
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier,
+    ) {
         Box(
             modifier = Modifier
                 .size(10.dp)
-                .background(color, CircleShape),
+                .background(color.copy(alpha = alpha), CircleShape),
         )
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f * alpha),
             modifier = Modifier.padding(start = 6.dp),
         )
     }
@@ -324,8 +360,7 @@ private fun clockLabel(minuteFromNoon: Int): String {
 private fun DrawScope.drawNight(
     nights: List<NightColumn>,
     selectedIndex: Int,
-    notBadColor: Color,
-    otherColor: Color,
+    palette: ChartPalette,
     nightColor: Color,
     lineColor: Color,
 ) {
@@ -354,8 +389,22 @@ private fun DrawScope.drawNight(
         column.usage.sortedBy { it.notBad }.forEach { span ->
             val top = y(span.startMinute)
             val height = (y(span.endMinute) - top).coerceAtLeast(minSpan)
-            val color = if (span.notBad) notBadColor else otherColor
+            val color = if (span.notBad) palette.notBad else palette.other
             drawRoundRect(color, Offset(left, top), Size(barWidth, height), corner)
+        }
+        // Challenge sessions: a narrow green strip on the column's right edge, on top of everything.
+        if (palette.showChallenge) {
+            val stripWidth = barWidth * CHALLENGE_STRIP_FRACTION
+            column.challenge.forEach { span ->
+                val top = y(span.startMinute)
+                val height = (y(span.endMinute) - top).coerceAtLeast(minSpan)
+                drawRoundRect(
+                    palette.challenge,
+                    Offset(left + barWidth - stripWidth, top),
+                    Size(stripWidth, height),
+                    cornerRadius = corner,
+                )
+            }
         }
     }
 
@@ -373,8 +422,8 @@ private fun DrawScope.drawNight(
 private fun TotalsChart(
     totals: List<OverviewViewModel.DayBar>,
     averages: UsageAverages.Result?,
-    notBadColor: Color,
-    otherColor: Color,
+    palette: ChartPalette,
+    onToggleChallenge: () -> Unit,
 ) {
     val dayLabels = stringResource(R.string.overview_day_labels).split(",")
     val textMeasurer = rememberTextMeasurer()
@@ -394,8 +443,7 @@ private fun TotalsChart(
                 bars = totals,
                 valueLabels = valueLabels,
                 avgMs = averages?.avgMsPerDay,
-                notBadColor = notBadColor,
-                otherColor = otherColor,
+                palette = palette,
                 lineColor = lineColor,
                 textMeasurer = textMeasurer,
                 labelStyle = labelStyle,
@@ -403,7 +451,7 @@ private fun TotalsChart(
         }
         DayLabelRow(labels = dayLabels.take(DAYS), dimmed = false)
         averages?.let { AverageSummary(it) }
-        ChartLegend(notBadColor, otherColor)
+        ChartLegend(palette, onToggleChallenge)
     }
 }
 
@@ -444,14 +492,13 @@ private fun DrawScope.drawTotals(
     bars: List<OverviewViewModel.DayBar>,
     valueLabels: List<String>,
     avgMs: Long?,
-    notBadColor: Color,
-    otherColor: Color,
+    palette: ChartPalette,
     lineColor: Color,
     textMeasurer: TextMeasurer,
     labelStyle: TextStyle,
 ) {
     if (bars.isEmpty()) return
-    val scaleMax = maxOf(TOTALS_SCALE_FLOOR_MS, bars.maxOf { it.totalMs }).toFloat()
+    val scaleMax = maxOf(TOTALS_SCALE_FLOOR_MS, bars.maxOf { maxOf(it.totalMs, it.challengeMs) }).toFloat()
     val columnWidth = size.width / bars.size
     val gap = columnWidth * COLUMN_GAP_FRACTION
     val corner = CornerRadius(CORNER_PX, CORNER_PX)
@@ -464,20 +511,32 @@ private fun DrawScope.drawTotals(
 
     bars.forEachIndexed { i, bar ->
         val left = i * columnWidth + gap
-        val barWidth = columnWidth - gap * 2
+        val fullWidth = columnWidth - gap * 2
+        // With the challenge layer on, the usage stack narrows and a green bar sits beside it.
+        val barWidth = if (palette.showChallenge) fullWidth * TOTALS_USAGE_FRACTION else fullWidth
         val notBadHeight = heightOf(bar.notBadMs)
         val otherHeight = heightOf(bar.otherMs)
         val bottom = size.height
         // "Not bad" (blue) sits on the baseline; "other" (violet) stacks above a 2px surface gap.
         if (notBadHeight > 0f) {
-            drawRoundRect(notBadColor, Offset(left, bottom - notBadHeight), Size(barWidth, notBadHeight), corner)
+            drawRoundRect(palette.notBad, Offset(left, bottom - notBadHeight), Size(barWidth, notBadHeight), corner)
         }
         if (otherHeight > 0f) {
             val below = if (notBadHeight > 0f) notBadHeight + stackGap else 0f
             drawRoundRect(
-                otherColor,
+                palette.other,
                 Offset(left, bottom - below - otherHeight),
                 Size(barWidth, otherHeight),
+                cornerRadius = corner,
+            )
+        }
+        val challengeHeight = heightOf(bar.challengeMs)
+        if (palette.showChallenge && challengeHeight > 0f) {
+            val challengeWidth = fullWidth * TOTALS_CHALLENGE_FRACTION
+            drawRoundRect(
+                palette.challenge,
+                Offset(left + fullWidth - challengeWidth, bottom - challengeHeight),
+                Size(challengeWidth, challengeHeight),
                 cornerRadius = corner,
             )
         }

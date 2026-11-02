@@ -6,6 +6,7 @@
     <!-- Navigation -->
     <string name="nav_overview">Overview</string>
     <string name="nav_blocks">Blocks</string>
+    <string name="nav_challenges">Challenge</string>
     <string name="nav_settings">Settings</string>
 
     <!-- Durations -->
@@ -25,6 +26,7 @@
     <string name="overview_night_range">%1$s – %2$s</string>
     <string name="overview_legend_not_bad">Not bad</string>
     <string name="overview_legend_other">Other apps</string>
+    <string name="overview_legend_challenge">Challenge</string>
     <string name="overview_avg_per_day">Ø %1$s per day</string>
     <string name="overview_percent">%1$+d%%</string>
     <string name="overview_vs_last_week">%1$s vs last week</string>
@@ -56,6 +58,48 @@
     <string name="days_every_day">Every day</string>
     <string name="days_weekdays">Weekdays</string>
     <string name="days_weekends">Weekends</string>
+
+    <!-- Challenges -->
+    <string name="challenges_title">Challenges</string>
+    <string name="challenges_add">New</string>
+    <string name="challenges_empty">No challenge yet. Create one — e.g. “Mobility”, 30 min per day for a month.</string>
+    <string name="challenge_period_goal">%1$s – %2$s · %3$d min/day</string>
+    <string name="challenge_timer_start">Start</string>
+    <string name="challenge_timer_stop">Stop</string>
+    <string name="challenge_timer_elsewhere">A timer is already running for “%1$s”.</string>
+    <string name="challenge_today">Today</string>
+    <string name="challenge_total">Total</string>
+    <string name="challenge_average">Average per day</string>
+    <string name="challenge_of_goal">%1$s of %2$s</string>
+    <string name="challenge_balance_ahead">%1$s ahead</string>
+    <string name="challenge_balance_behind">%1$s behind</string>
+    <string name="challenge_days_left">%1$d days left · %2$s per day to finish</string>
+    <string name="challenge_finished">Challenge over.</string>
+    <string name="challenge_not_started">Starts %1$s.</string>
+    <string name="challenge_add_time">Add time</string>
+    <string name="challenge_edit">Edit</string>
+    <string name="challenge_delete">Delete</string>
+    <string name="challenge_delete_confirm_title">Delete challenge?</string>
+    <string name="challenge_delete_confirm_message">Deleting “%1$s” removes all its logged time. This cannot be undone.</string>
+    <string name="challenge_entries_title">Logged time</string>
+    <string name="challenge_entries_empty">Nothing logged yet — start the timer or add time.</string>
+    <string name="challenge_entry_timed">%1$s · %2$s – %3$s</string>
+    <string name="challenge_entry_manual">%1$s · added later</string>
+    <string name="challenge_entry_delete">Remove entry</string>
+    <string name="challenge_others_title">Other challenges</string>
+    <string name="challenge_add_time_title">Add time</string>
+    <string name="challenge_add_time_hint">For a session you did not time. Counts like timed minutes.</string>
+    <string name="challenge_add_time_day">Day</string>
+    <string name="challenge_minutes">%1$d min</string>
+
+    <!-- Challenge editor -->
+    <string name="challenge_editor_name">Challenge name</string>
+    <string name="challenge_editor_start">Start</string>
+    <string name="challenge_editor_end">End</string>
+    <string name="challenge_editor_goal">Goal per day</string>
+    <string name="challenge_editor_preset_month">Whole month</string>
+    <string name="challenge_editor_preset_week">One week</string>
+    <string name="challenge_editor_save">Save challenge</string>
 
     <!-- Block overlay -->
     <string name="block_title">Phone locked</string>

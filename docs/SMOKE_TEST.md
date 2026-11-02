@@ -14,6 +14,9 @@ Each item: ☐ = untested for this release. Expected result in *italics*.
 2. ☐ **v1 → v2 migration**: a device that had night mode enabled shows one **Block** in the
    Blocks tab after updating; any old always/limit/schedule test rules are gone. *No crash on
    first launch (the migration ran).*
+2a. ☐ **v2 → v3 migration (v0.4)**: updating in place keeps blocks, "Not bad" apps and usage
+    history; the new Challenge tab opens empty. *No crash on first launch (AutoMigration added
+    the two challenge tables).*
 3. ☐ Usage-access onboarding opens the right Settings screen and detects the grant.
 4. ☐ **Overview → Nights**: past columns show a bright turquoise night span — the longest
    no-use gap touching 03:30–06:00 (a brief 4 a.m. wake-up must NOT end the night; use past
@@ -56,6 +59,24 @@ Each item: ☐ = untested for this release. Expected result in *italics*.
 14. ☐ Disabling the accessibility service triggers the watchdog notification; fallback polling
     still raises the lockout (overlay-only; the corner indicator may lag by ~1 s).
 
+## Challenges (v0.4)
+
+16. ☐ **Create**: Challenge tab → New → name "Mobility", default period = this month, "One week"
+    / "Whole month" presets adjust the end, goal −/+ in 5-min steps → Save. *The tab shows the
+    challenge with 00:00, Today 0m of 30m, Total 0m of (days × 30 min).*
+17. ☐ **Timer**: Start, lock the phone, wait a minute, unlock, kill Dift from recents, reopen.
+    *The timer is still running with the right elapsed time; Stop logs one entry with the real
+    start–end and Today/Total/Average update.*
+18. ☐ **Average goal**: add 25 min to yesterday and 35 min to today via "Add time" (date picker
+    is bounded to the period and today). *Average per day reads 30m · "0m ahead"; a day with 10
+    min shows "behind" in red and a higher "per day to finish".*
+19. ☐ **Second challenge**: create another one (a week); with a timer running for the first, the
+    second's Start is disabled with a hint; "Other challenges" rows switch the shown challenge.
+    Delete asks for confirmation and removes its entries.
+20. ☐ **Overview**: timed sessions appear as a green strip in the Nights view and a green side
+    bar in Daily totals (manual entries only in totals); screen-time numbers are unchanged; tapping
+    the "Challenge" legend entry hides the green layer (dimmed legend) and survives a restart.
+
 ## Block editor & list
 
 15. ☐ Editor: all seven day chips visible (no cutoff); −/+ nudge start/end by 15 min and
@@ -65,4 +86,4 @@ Each item: ☐ = untested for this release. Expected result in *italics*.
 
 ## Always
 
-16. ☐ Battery: overnight drain with monitoring active is comparable to before (< a few %).
+21. ☐ Battery: overnight drain with monitoring active is comparable to before (< a few %).
