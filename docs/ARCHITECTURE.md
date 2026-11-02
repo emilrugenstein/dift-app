@@ -55,7 +55,9 @@ DeviceStateMonitor ────→  BlockingCoordinator ──→ BlockEngine.ac
 - **Usage tracking**: `UsageStatsIngester` reads `UsageEvents` since a DataStore checkpoint,
   derives sessions via pure `SessionDeriver` (pre-split at local midnight), upserts Room in one
   transaction. Runs every 15 min (WorkManager) and on overview open. Nightly `RollupWorker`
-  finalizes and prunes. The overview reads sessions back through the pure `NightTimeline`.
+  finalizes; it keeps usage history for all years (pruning only with an explicit retention
+  setting) and caps the block-event log. The overview reads sessions back through the pure
+  `NightTimeline`. Settings → Data exports everything as a zip of CSVs (`DataExporter`).
 
 ## Threading model
 

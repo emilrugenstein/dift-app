@@ -50,6 +50,13 @@ interface UsageDao {
     @Query("SELECT MIN(dayLocal) FROM usage_sessions")
     suspend fun earliestSessionDay(): String?
 
+    // Full-table reads for the data export (docs/features/export.md).
+    @Query("SELECT * FROM usage_sessions ORDER BY startEpochMs")
+    suspend fun allSessions(): List<UsageSessionEntity>
+
+    @Query("SELECT * FROM daily_usage ORDER BY dayLocal, packageName")
+    suspend fun allDaily(): List<DailyUsageEntity>
+
     @Query("DELETE FROM usage_sessions WHERE dayLocal < :cutoffDayLocal")
     suspend fun pruneSessionsBefore(cutoffDayLocal: String)
 

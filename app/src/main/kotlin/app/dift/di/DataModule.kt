@@ -28,7 +28,9 @@ object DataModule {
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): DiftDatabase =
-        Room.databaseBuilder(context, DiftDatabase::class.java, "dift.db")
+        // No fallbackToDestructiveMigration — ever (CLAUDE.md invariant #11): a missing migration
+        // must crash loudly, not silently wipe years of usage history.
+        Room.databaseBuilder(context, DiftDatabase::class.java, DiftDatabase.NAME)
             .addMigrations(MIGRATION_1_2)
             .build()
 

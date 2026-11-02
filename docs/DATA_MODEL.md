@@ -48,7 +48,10 @@ invariant #7 is now enforced, not just stated).
 (challengeId, dayLocal) for day totals and (startEpochMs) for the overview's range query.
 
 A genuine *structural* change from here still requires a committed schema JSON and either an
-AutoMigration or a hand-written one (CLAUDE.md invariant #7).
+AutoMigration or a hand-written one (CLAUDE.md invariant #7) — and `MigrationTest` must keep
+proving that a populated previous-version database comes through with every row (invariant #11).
+
+Everything above can be exported as a zip of CSVs from Settings → Data (docs/features/export.md).
 
 ## Room entities
 
@@ -69,7 +72,8 @@ reads these back via `NightTimeline`.
 
 ### `daily_usage`
 Composite PK (dayLocal, packageName): totalMs, sessionCount. Recomputed transactionally by the
-ingester; finalized + pruned by the nightly rollup.
+ingester. Kept for all years like `usage_sessions` (the nightly rollup prunes usage only when
+`retentionDays` > 0); the block-event log is the only table with a fixed cap (365 days).
 
 ### `block_events`
 id, packageName, ruleId?, timestampEpochMs, reason (always `USAGE_DEBT` in v2), outcome
@@ -88,7 +92,7 @@ Retained from v1, unused. Pruned by the nightly rollup (a no-op on an empty tabl
 | openSessions | String | encoded pending open sessions carried across ingest batches |
 | cooldownStartedAt | Long? | usage-debt: current cooldown start (for the indicator drain) |
 | cooldownUntil | Long? | usage-debt: cooldown deadline (epoch ms) — survives reboot |
-| retentionDays | Int | usage/event history retention (default 365) |
+| retentionDays | Int | usage-history retention in days; `0` = keep forever (the default — history is kept for all years) |
 | forcePollingMode | Boolean | force the polling detector instead of accessibility (debug aid) |
 | not_bad_apps | String | comma-joined package set: "Not bad" apps (blue in charts, preselected as exempt in new blocks) |
 | challenge_timer_id / challenge_timer_started_at | Long? | the one running challenge timer; Stop writes the entry to Room and clears both |

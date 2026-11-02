@@ -33,7 +33,11 @@ class IngestWorker @AssistedInject constructor(
     }
 }
 
-/** Nightly finalization: one last ingest, then prune history beyond the retention window. */
+/**
+ * Nightly finalization: one last ingest, then housekeeping. Usage history is **kept for all
+ * years** unless a retention window is set (`retentionDays` > 0 — docs/DATA_MODEL.md); only the
+ * block-event audit log is always capped at [EVENT_RETENTION_DAYS].
+ */
 @HiltWorker
 class RollupWorker @AssistedInject constructor(
     @Assisted context: Context,
@@ -44,21 +48,21 @@ class RollupWorker @AssistedInject constructor(
 ) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         ingester.ingestNow()
-        val retentionDays = settings.retentionDays.first()
         val now = System.currentTimeMillis()
-        val cutoffDay = SessionDeriver.dayLocalOf(
-            now - retentionDays * DAY_MS,
-            ZoneId.systemDefault(),
-        )
-        database.usageDao().pruneSessionsBefore(cutoffDay)
-        database.usageDao().pruneDailyBefore(cutoffDay)
-        database.blockEventDao().pruneBefore(now - retentionDays * DAY_MS)
+        val retentionDays = settings.retentionDays.first()
+        if (retentionDays > 0) {
+            val cutoffDay = SessionDeriver.dayLocalOf(now - retentionDays * DAY_MS, ZoneId.systemDefault())
+            database.usageDao().pruneSessionsBefore(cutoffDay)
+            database.usageDao().pruneDailyBefore(cutoffDay)
+        }
+        database.blockEventDao().pruneBefore(now - EVENT_RETENTION_DAYS * DAY_MS)
         database.grantDao().pruneExpired(now)
         return Result.success()
     }
 
     private companion object {
         const val DAY_MS = 24L * 60 * 60 * 1000
+        const val EVENT_RETENTION_DAYS = 365
     }
 }
 

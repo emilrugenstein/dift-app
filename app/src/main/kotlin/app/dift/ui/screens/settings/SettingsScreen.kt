@@ -3,6 +3,8 @@ package app.dift.ui.screens.settings
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -14,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -33,13 +36,21 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.dift.BuildConfig
 import app.dift.R
+import app.dift.data.export.DataExporter
+import java.time.LocalDate
 
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val permissions by viewModel.permissions.collectAsStateWithLifecycle()
     val notBad by viewModel.notBadState.collectAsStateWithLifecycle()
+    val exportState by viewModel.exportState.collectAsStateWithLifecycle()
+    val storageMb by viewModel.storageMegabytes.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val packageUri = Uri.parse("package:${context.packageName}")
+    // Storage Access Framework: the user picks where the zip goes; no storage permission needed.
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument(DataExporter.MIME_TYPE),
+    ) { uri -> uri?.let { viewModel.export(it, BuildConfig.VERSION_NAME) } }
 
     LifecycleResumeEffect(Unit) {
         viewModel.refresh()
@@ -144,12 +155,62 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
         item { HorizontalDivider() }
         item {
             Text(
+                text = stringResource(R.string.settings_data_title),
+                style = MaterialTheme.typography.titleMedium,
+            )
+        }
+        item {
+            Text(
+                text = stringResource(R.string.settings_storage, storageMb),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        item {
+            Text(
+                text = stringResource(R.string.settings_history_hint),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        item {
+            Button(
+                onClick = { exportLauncher.launch(exportFileName()) },
+                enabled = exportState != SettingsViewModel.ExportState.RUNNING,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.settings_export))
+            }
+        }
+        item {
+            Text(
+                text = stringResource(R.string.settings_export_hint),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        when (exportState) {
+            SettingsViewModel.ExportState.DONE -> item {
+                Text(stringResource(R.string.settings_export_done), style = MaterialTheme.typography.bodyMedium)
+            }
+            SettingsViewModel.ExportState.FAILED -> item {
+                Text(
+                    text = stringResource(R.string.settings_export_failed),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            else -> Unit
+        }
+        item { HorizontalDivider() }
+        item {
+            Text(
                 text = stringResource(R.string.home_version_label, BuildConfig.VERSION_NAME),
                 style = MaterialTheme.typography.bodySmall,
             )
         }
     }
 }
+
+/** "dift-export-2026-11-02.zip" — a file name, not prose. */
+private fun exportFileName(): String = "dift-export-${LocalDate.now()}.zip"
 
 @Composable
 private fun PermissionRow(label: String, granted: Boolean, onOpen: () -> Unit) {
