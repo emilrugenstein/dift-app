@@ -93,12 +93,13 @@ private const val USAGE_DARKEN = 0.15f
 private val OtherVioletDark = Color(0xFFB62FA5)
 private val OtherVioletLight = Color(0xFF86198F)
 
-// Challenge sessions (docs/features/challenges.md): a green that stays tellable from the teal
-// night field AND both usage marks (dark #6AA431: contrast 6.2:1, CVD ΔE ≥ 13 vs all three;
-// light #3F6212: contrast 6.8:1, CVD ΔE ≥ 11). Drawn as a narrow strip / side bar, never stacked
-// into usage.
-private val ChallengeGreenDark = Color(0xFF6AA431)
-private val ChallengeGreenLight = Color(0xFF3F6212)
+// Challenge sessions (docs/features/challenges.md): a light yellow, deliberately far from the
+// teal night field (which already reads green-ish). Dark #FDE047: contrast 14:1, CVD ΔE ≥ 16 vs
+// teal and ≥ 35 vs both usage marks — above the mark-lightness band on purpose (a chosen accent;
+// the strip / side-bar position and the legend carry identity). Light mode cannot show a light
+// yellow on near-white, so it steps down to goldenrod #B8860B (contrast 3.1:1, CVD ΔE ≥ 12).
+private val ChallengeYellowDark = Color(0xFFFDE047)
+private val ChallengeYellowLight = Color(0xFFB8860B)
 private const val CHALLENGE_STRIP_FRACTION = 0.36f
 private const val TOTALS_USAGE_FRACTION = 0.64f
 private const val TOTALS_CHALLENGE_FRACTION = 0.28f
@@ -123,7 +124,7 @@ fun OverviewScreen(viewModel: OverviewViewModel = hiltViewModel()) {
     val palette = ChartPalette(
         notBad = lerp(MaterialTheme.colorScheme.primary, Color.Black, USAGE_DARKEN),
         other = if (dark) OtherVioletDark else OtherVioletLight,
-        challenge = if (dark) ChallengeGreenDark else ChallengeGreenLight,
+        challenge = if (dark) ChallengeYellowDark else ChallengeYellowLight,
         showChallenge = state.showChallenge,
     )
 
@@ -288,7 +289,7 @@ private fun ChartLegend(palette: ChartPalette, onToggleChallenge: () -> Unit) {
     ) {
         LegendEntry(palette.notBad, stringResource(R.string.overview_legend_not_bad))
         LegendEntry(palette.other, stringResource(R.string.overview_legend_other))
-        // The challenge entry is a toggle: tapping it hides/shows the green layer.
+        // The challenge entry is a toggle: tapping it hides/shows the yellow layer.
         LegendEntry(
             color = palette.challenge,
             label = stringResource(R.string.overview_legend_challenge),
@@ -392,7 +393,7 @@ private fun DrawScope.drawNight(
             val color = if (span.notBad) palette.notBad else palette.other
             drawRoundRect(color, Offset(left, top), Size(barWidth, height), corner)
         }
-        // Challenge sessions: a narrow green strip on the column's right edge, on top of everything.
+        // Challenge sessions: a narrow yellow strip on the column's right edge, on top of everything.
         if (palette.showChallenge) {
             val stripWidth = barWidth * CHALLENGE_STRIP_FRACTION
             column.challenge.forEach { span ->
@@ -512,7 +513,7 @@ private fun DrawScope.drawTotals(
     bars.forEachIndexed { i, bar ->
         val left = i * columnWidth + gap
         val fullWidth = columnWidth - gap * 2
-        // With the challenge layer on, the usage stack narrows and a green bar sits beside it.
+        // With the challenge layer on, the usage stack narrows and a yellow bar sits beside it.
         val barWidth = if (palette.showChallenge) fullWidth * TOTALS_USAGE_FRACTION else fullWidth
         val notBadHeight = heightOf(bar.notBadMs)
         val otherHeight = heightOf(bar.otherMs)

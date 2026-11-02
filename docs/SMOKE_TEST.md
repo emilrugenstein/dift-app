@@ -83,9 +83,10 @@ Each item: ☐ = untested for this release. Expected result in *italics*.
 19. ☐ **Second challenge**: create another one (a week); with a timer running for the first, the
     second's Start is disabled with a hint; "Other challenges" rows switch the shown challenge.
     Delete asks for confirmation and removes its entries.
-20. ☐ **Overview**: timed sessions appear as a green strip in the Nights view and a green side
-    bar in Daily totals (manual entries only in totals); screen-time numbers are unchanged; tapping
-    the "Challenge" legend entry hides the green layer (dimmed legend) and survives a restart.
+20. ☐ **Overview**: timed sessions appear as a light-yellow strip in the Nights view and a yellow
+    side bar in Daily totals (manual entries only in totals; goldenrod in light mode); screen-time
+    numbers are unchanged; tapping the "Challenge" legend entry hides the yellow layer (dimmed
+    legend) and survives a restart.
 
 ## Block editor & list
 
