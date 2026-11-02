@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -115,90 +116,9 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             )
         }
         item { HorizontalDivider() }
-        item {
-            Text(
-                text = stringResource(R.string.settings_not_bad_title),
-                style = MaterialTheme.typography.titleMedium,
-            )
-        }
-        item {
-            Text(
-                text = stringResource(R.string.settings_not_bad_description),
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-        item {
-            OutlinedTextField(
-                value = notBad.query,
-                onValueChange = viewModel::setQuery,
-                label = { Text(stringResource(R.string.editor_search_apps)) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        items(notBad.filtered, key = { it.packageName }) { app ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = app.label,
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.weight(1f),
-                )
-                Checkbox(
-                    checked = app.packageName in notBad.notBad,
-                    onCheckedChange = { viewModel.toggleNotBad(app.packageName) },
-                )
-            }
-        }
+        notBadSection(notBad, onQuery = viewModel::setQuery, onToggle = viewModel::toggleNotBad)
         item { HorizontalDivider() }
-        item {
-            Text(
-                text = stringResource(R.string.settings_data_title),
-                style = MaterialTheme.typography.titleMedium,
-            )
-        }
-        item {
-            Text(
-                text = stringResource(R.string.settings_storage, storageMb),
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-        item {
-            Text(
-                text = stringResource(R.string.settings_history_hint),
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-        item {
-            Button(
-                onClick = { exportLauncher.launch(exportFileName()) },
-                enabled = exportState != SettingsViewModel.ExportState.RUNNING,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(R.string.settings_export))
-            }
-        }
-        item {
-            Text(
-                text = stringResource(R.string.settings_export_hint),
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-        when (exportState) {
-            SettingsViewModel.ExportState.DONE -> item {
-                Text(stringResource(R.string.settings_export_done), style = MaterialTheme.typography.bodyMedium)
-            }
-            SettingsViewModel.ExportState.FAILED -> item {
-                Text(
-                    text = stringResource(R.string.settings_export_failed),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-            else -> Unit
-        }
+        dataSection(storageMb, exportState, onExport = { exportLauncher.launch(exportFileName()) })
         item { HorizontalDivider() }
         item {
             Text(
@@ -211,6 +131,105 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
 
 /** "dift-export-2026-11-02.zip" — a file name, not prose. */
 private fun exportFileName(): String = "dift-export-${LocalDate.now()}.zip"
+
+/** The "Not bad" apps picker: title, description, search field, one checkbox row per app. */
+private fun LazyListScope.notBadSection(
+    state: SettingsViewModel.NotBadUiState,
+    onQuery: (String) -> Unit,
+    onToggle: (String) -> Unit,
+) {
+    item {
+        Text(
+            text = stringResource(R.string.settings_not_bad_title),
+            style = MaterialTheme.typography.titleMedium,
+        )
+    }
+    item {
+        Text(
+            text = stringResource(R.string.settings_not_bad_description),
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+    item {
+        OutlinedTextField(
+            value = state.query,
+            onValueChange = onQuery,
+            label = { Text(stringResource(R.string.editor_search_apps)) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+    items(state.filtered, key = { it.packageName }) { app ->
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = app.label,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f),
+            )
+            Checkbox(
+                checked = app.packageName in state.notBad,
+                onCheckedChange = { onToggle(app.packageName) },
+            )
+        }
+    }
+}
+
+/** Storage size, the all-years retention note, and the export button (docs/features/export.md). */
+private fun LazyListScope.dataSection(
+    storageMb: Double,
+    exportState: SettingsViewModel.ExportState,
+    onExport: () -> Unit,
+) {
+    item {
+        Text(
+            text = stringResource(R.string.settings_data_title),
+            style = MaterialTheme.typography.titleMedium,
+        )
+    }
+    item {
+        Text(
+            text = stringResource(R.string.settings_storage, storageMb),
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+    item {
+        Text(
+            text = stringResource(R.string.settings_history_hint),
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+    item {
+        Button(
+            onClick = onExport,
+            enabled = exportState != SettingsViewModel.ExportState.RUNNING,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.settings_export))
+        }
+    }
+    item {
+        Text(
+            text = stringResource(R.string.settings_export_hint),
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+    when (exportState) {
+        SettingsViewModel.ExportState.DONE -> item {
+            Text(stringResource(R.string.settings_export_done), style = MaterialTheme.typography.bodyMedium)
+        }
+        SettingsViewModel.ExportState.FAILED -> item {
+            Text(
+                text = stringResource(R.string.settings_export_failed),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+        else -> Unit
+    }
+}
 
 @Composable
 private fun PermissionRow(label: String, granted: Boolean, onOpen: () -> Unit) {
