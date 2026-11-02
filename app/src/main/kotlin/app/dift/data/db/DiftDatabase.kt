@@ -45,4 +45,8 @@ abstract class DiftDatabase : RoomDatabase() {
     abstract fun grantDao(): GrantDao
     abstract fun blockEventDao(): BlockEventDao
     abstract fun challengeDao(): ChallengeDao
+
+    companion object {
+        const val NAME = "dift.db"
+    }
 }

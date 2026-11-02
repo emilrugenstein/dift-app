@@ -18,6 +18,12 @@ interface ChallengeDao {
     @Query("SELECT * FROM challenges WHERE id = :id")
     suspend fun challengeById(id: Long): ChallengeEntity?
 
+    @Query("SELECT * FROM challenges ORDER BY id")
+    suspend fun allChallenges(): List<ChallengeEntity>
+
+    @Query("SELECT * FROM challenge_entries ORDER BY startEpochMs")
+    suspend fun allEntries(): List<ChallengeEntryEntity>
+
     @Insert
     suspend fun insertChallenge(challenge: ChallengeEntity): Long
 

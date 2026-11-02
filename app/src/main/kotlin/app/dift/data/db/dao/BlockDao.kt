@@ -27,6 +27,12 @@ interface BlockDao {
     @Query("SELECT * FROM block_rules WHERE id = :id AND type = 'USAGE_DEBT'")
     suspend fun blockById(id: Long): BlockRuleEntity?
 
+    @Query("SELECT * FROM block_rules WHERE type = 'USAGE_DEBT' ORDER BY id")
+    suspend fun allBlocks(): List<BlockRuleEntity>
+
+    @Query("SELECT * FROM rule_apps ORDER BY ruleId, packageName")
+    suspend fun allExemptApps(): List<RuleAppCrossRef>
+
     @Insert
     suspend fun insertBlock(block: BlockRuleEntity): Long
 

@@ -54,13 +54,15 @@ target, bar), **Average per day** with the signed balance, and **days left · ne
 
 ## In the usage overview
 
-Timed sessions (and the running timer) are drawn in **green** (`#6AA431` dark / `#3F6212`
-light — chosen for CVD separation from the teal night field and both usage colors):
+Timed sessions (and the running timer) are drawn in **light yellow** (`#FDE047` dark;
+goldenrod `#B8860B` in light mode, where a light yellow has no contrast — chosen to stay far
+from the teal night field, which already reads green-ish, and CVD-separable from both usage
+colors):
 
 - **Nights**: a narrow strip on the right edge of the column at the session's real time.
-- **Daily totals**: a narrow green bar beside each day's usage stack (manual entries included).
+- **Daily totals**: a narrow yellow bar beside each day's usage stack (manual entries included).
 
-The legend gains a tappable **Challenge** entry: tapping it hides/shows the green layer
+The legend gains a tappable **Challenge** entry: tapping it hides/shows the yellow layer
 (persisted: `overview_show_challenge`). Screen-time numbers never include challenge time.
 
 ## Out of scope (deliberately)

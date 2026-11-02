@@ -23,4 +23,7 @@ interface BlockEventDao {
 
     @Query("DELETE FROM block_events WHERE timestampEpochMs < :cutoffMs")
     suspend fun pruneBefore(cutoffMs: Long)
+
+    @Query("SELECT * FROM block_events ORDER BY timestampEpochMs")
+    suspend fun all(): List<BlockEventEntity>
 }

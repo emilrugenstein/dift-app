@@ -63,6 +63,11 @@ and the small corner indicator. No home-kick, no Activity. Details + diagram: do
 9. **Dependencies are declared only in `gradle/libs.versions.toml`.**
 10. If you touched `system/`, tell the user which items of docs/SMOKE_TEST.md to re-run —
     services, overlays, and permission flows cannot be verified in CI.
+11. **An update never loses history.** Migrations must preserve every row of `usage_sessions`,
+    `daily_usage`, `challenges` and `challenge_entries`; `fallbackToDestructiveMigration` is
+    forbidden (a missing migration must crash, not wipe). `MigrationTest` opens a populated
+    database built from the committed previous-version schema and asserts the rows survive —
+    keep it passing when the schema version changes.
 
 ## Before you write code
 

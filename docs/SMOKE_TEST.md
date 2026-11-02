@@ -59,6 +59,16 @@ Each item: ☐ = untested for this release. Expected result in *italics*.
 14. ☐ Disabling the accessibility service triggers the watchdog notification; fallback polling
     still raises the lockout (overlay-only; the corner indicator may lag by ~1 s).
 
+## Data (v0.4.1)
+
+2b. ☐ **Settings → Data**: the database size is shown; *Export data* opens the system file
+    picker with `dift-export-<date>.zip` preselected; saving to Downloads shows "Export saved."
+    and the zip opens with `meta.json` + 6 CSV files whose row counts match the app (e.g.
+    `challenges.csv` lists every challenge). *Nothing else changes.*
+2c. ☐ **History survives**: after the update, the Overview still pages back to the oldest week
+    it showed before; a week older than one year (once you have one) is still there the morning
+    after the nightly rollup.
+
 ## Challenges (v0.4)
 
 16. ☐ **Create**: Challenge tab → New → name "Mobility", default period = this month, "One week"
@@ -73,9 +83,10 @@ Each item: ☐ = untested for this release. Expected result in *italics*.
 19. ☐ **Second challenge**: create another one (a week); with a timer running for the first, the
     second's Start is disabled with a hint; "Other challenges" rows switch the shown challenge.
     Delete asks for confirmation and removes its entries.
-20. ☐ **Overview**: timed sessions appear as a green strip in the Nights view and a green side
-    bar in Daily totals (manual entries only in totals); screen-time numbers are unchanged; tapping
-    the "Challenge" legend entry hides the green layer (dimmed legend) and survives a restart.
+20. ☐ **Overview**: timed sessions appear as a light-yellow strip in the Nights view and a yellow
+    side bar in Daily totals (manual entries only in totals; goldenrod in light mode); screen-time
+    numbers are unchanged; tapping the "Challenge" legend entry hides the yellow layer (dimmed
+    legend) and survives a restart.
 
 ## Block editor & list
 

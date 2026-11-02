@@ -47,7 +47,8 @@ class SettingsRepository @Inject constructor(
 
     // --- General settings ---
 
-    val retentionDays: Flow<Int> = dataStore.data.map { it[RETENTION_DAYS] ?: DEFAULT_RETENTION_DAYS }
+    /** Usage-history retention in days; [KEEP_FOREVER] (the default) never prunes usage. */
+    val retentionDays: Flow<Int> = dataStore.data.map { it[RETENTION_DAYS] ?: KEEP_FOREVER }
 
     suspend fun setRetentionDays(value: Int) {
         dataStore.edit { it[RETENTION_DAYS] = value }
@@ -128,7 +129,7 @@ class SettingsRepository @Inject constructor(
         val CHALLENGE_TIMER_STARTED_AT = longPreferencesKey("challenge_timer_started_at")
         val OVERVIEW_SHOW_CHALLENGE = booleanPreferencesKey("overview_show_challenge")
 
-        const val DEFAULT_RETENTION_DAYS = 365
+        const val KEEP_FOREVER = 0
 
         // "pkg|start|cls1;cls2" entries joined by ',' — package and activity-class names never
         // contain '|', ',' or ';'. The class list is the deriver's resumed-activity set; entries
